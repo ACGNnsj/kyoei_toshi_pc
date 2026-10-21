@@ -145,8 +145,8 @@ correctly. Fallback idea: build the icon from the last presented frame.
 |---|---|
 | No GPU Stall Timeout | the game's own int 0x41 after 10M spins on a GPU label (item handed over) |
 | Skip Constants For Unbound Shader | NULL shader in the seven per-stage data writers 0x45eaa0-0x45f3c0 (QTE, Continue) |
-| Skip Unloaded NPC List Entries | NULL entry in the NPC list walk at 0x23c53b (stage load at 30 FPS) |
+| Skip Unloaded NPC List Entries | NULL entries of the NPC list in FUN_0023be90: 0x23c53b, 0x23cd42 and the sort search at 0x23c284 (stage load at 30 FPS) |
 
 The readback change made 0x23c53b rarer but did not remove it: these are the game's races,
-exposed by the PC's speed. The third patch uses 0x433131-0x4331bb as a code cave: the stall
+exposed by the PC's speed. The third patch uses 0x433131-0x433191 (of 0x433131-0x4331bb) as a code cave: the stall
 path the first patch makes dead (its jmp is repeated in the third so it stands alone).

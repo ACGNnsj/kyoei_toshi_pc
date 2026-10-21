@@ -22,11 +22,13 @@
             <Line Type="bytes" Address="0x0085f3ef" Value="4d8bacc480c100004d85ed0f842401000069c8000600004863c9498d8c8c9000000048894dc083f8020f85b20000009090"/>
         </PatchList>
     </Metadata>
-    <Metadata Title="City Shrouded in Shadow" Name="Skip Unloaded NPC List Entries" Note="FUN_0023be90 walks the list at this+0x228 (count at +0x230) and reads entry+0x134; while a stage loads (and after the readback change, at 30 FPS) an entry can still be NULL: fault at 0x23c53b. The load at 0x23c537 jumps to 0x433131, a cave in the stall-timeout path that 'No GPU Stall Timeout' makes dead (its jmp is repeated here so this patch stands alone): a NULL entry goes to the next one (0x23ccb7, where the loop already skips), else the original test, back to 0x23c545." Author="kyoei_toshi_pc" PatchVer="0.1" AppVer="01.00" AppElf="eboot.bin" isEnabled="true">
+    <Metadata Title="City Shrouded in Shadow" Name="Skip Unloaded NPC List Entries" Note="FUN_0023be90 reads entries of the list at this+0x228 (count at +0x230) in three places without a NULL check; while a stage loads an entry can be NULL (faults at 0x23c53b and 0x23cd42 at 30 FPS). Each load jumps to a 32-byte stub in 0x433131-0x433191, a cave in the stall-timeout path that 'No GPU Stall Timeout' makes dead (its jmp is repeated here so this patch stands alone): a NULL entry goes to that loop's next item (0x23ccb7, 0x23ce50, 0x23c28e), else the original test, and back." Author="kyoei_toshi_pc" PatchVer="0.2" AppVer="01.00" AppElf="eboot.bin" isEnabled="true">
         <PatchList>
             <Line Type="bytes" Address="0x0083312b" Value="e98c00000090"/>
-            <Line Type="bytes" Address="0x00833131" Value="4c8b34d84d85f60f84799be0ff4183be34010000000f843594e0ffe9f493e0ff"/>
+            <Line Type="bytes" Address="0x00833131" Value="4c8b34d84d85f60f84799be0ff4183be34010000000f843594e0ffe9f493e0ff488b14d84885d20f84f29ce0ffc5f82e82d80000000f83e49ce0ffe9df9be0ff488b3cf24885ff0f841091e0ffc5f82e87e80000000f871b91e0ffe9fd90e0ff"/>
             <Line Type="bytes" Address="0x0063c537" Value="e9f56b1f00909090909090909090"/>
+            <Line Type="bytes" Address="0x0063cd3e" Value="e90e641f0090909090909090909090909090"/>
+            <Line Type="bytes" Address="0x0063c280" Value="e9ec6e1f00909090909090909090"/>
         </PatchList>
     </Metadata>
 </Patch>

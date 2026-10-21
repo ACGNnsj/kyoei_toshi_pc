@@ -131,6 +131,7 @@ typedef struct {
     uint16_t pixel_format, color_space, bit_depth, clut_number, filter_type, compression_level;
 } PngEncodeParam;
 typedef struct { uint32_t data_size, processed_height; } PngOutputInfo; /* image_pitch: bytes per row */
+#define PNG_CHUNK_PIXELS 512 /* pixels converted per step of a row */
 #define PNG_HANDLE_MAGIC 0x504e4745u /* "PNGE" in the caller's memory */
 
 static ABI int32_t png_query_memory(const PngCreateParam *param) {
@@ -203,15 +204,15 @@ static ABI int32_t png_encode(void *handle, const PngEncodeParam *p, PngOutputIn
     put(&w, "\0\0\0\0IDAT", 8);
     put(&w, "\x78\x01", 2); /* zlib header: deflate, no compression */
     uint32_t a = 1, b = 0;
-    uint8_t line[1 + 4 * 8192];
+    uint8_t line[1 + 4 * PNG_CHUNK_PIXELS]; /* small: guest threads may have 64 KiB stacks */
     uint64_t left = raw;
     size_t block_left = 0;
     for (uint32_t y = 0; y < p->height && !w.overflow; ++y) {
         const uint8_t *src = p->image + (uint64_t)y * p->pitch; /* pitch in bytes */
-        for (uint32_t x0 = 0; x0 < p->width || x0 == 0; x0 += 8192) {
+        for (uint32_t x0 = 0; x0 < p->width || x0 == 0; x0 += PNG_CHUNK_PIXELS) {
             size_t n = 0;
             if (!x0) line[n++] = 0; /* filter: none */
-            for (uint32_t x = x0; x < p->width && x < x0 + 8192; ++x) {
+            for (uint32_t x = x0; x < p->width && x < x0 + PNG_CHUNK_PIXELS; ++x) {
                 const uint8_t *px = src + (uint64_t)x * 4;
                 line[n++] = px[p->pixel_format ? 2 : 0]; line[n++] = px[1]; line[n++] = px[p->pixel_format ? 0 : 2];
                 if (alpha) line[n++] = px[3];
@@ -227,7 +228,7 @@ static ABI int32_t png_encode(void *handle, const PngEncodeParam *p, PngOutputIn
                 put(&w, line + i, m);
                 i += m; block_left -= m; left -= m;
             }
-            if (p->width <= x0 + 8192) break;
+            if (p->width <= x0 + PNG_CHUNK_PIXELS) break;
         }
     }
     put32(&w, b << 16 | a);

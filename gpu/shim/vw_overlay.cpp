@@ -61,6 +61,47 @@ asm(".section .rodata\n"
 extern "C" const unsigned char vw_font_ttf[];
 extern "C" const unsigned char vw_font_ttf_end[];
 
+// Japanese (and Chinese/Korean) text: the game's text dialog prompts and the names players type
+// with a system IME. DejaVu has no CJK glyphs, so a system CJK font is merged in; ImGui 1.92
+// loads its glyphs on demand. VW_CJK_FONT names another file; none found leaves DejaVu alone.
+static const char* FindCjkFont() {
+    static std::string found;
+    if (const char* chosen = std::getenv("VW_CJK_FONT"); chosen && *chosen) found = chosen;
+    else {
+#ifdef _WIN32
+        const char* windir = std::getenv("WINDIR");
+        const std::string fonts = std::string(windir && *windir ? windir : "C:\\Windows") + "\\Fonts\\";
+        const char* names[] = {"YuGothM.ttc", "meiryo.ttc", "msgothic.ttc", "NotoSansJP-VF.ttf"};
+        for (const char* name : names) {
+            if (FILE* f = std::fopen((fonts + name).c_str(), "rb")) {
+                std::fclose(f);
+                found = fonts + name;
+                break;
+            }
+        }
+#else
+        const char* paths[] = {"/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc",
+                               "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+                               "/usr/share/fonts/google-noto-cjk/NotoSansCJK-Regular.ttc",
+                               "/usr/share/fonts/noto-cjk/NotoSansCJKjp-Regular.otf",
+                               "/usr/share/fonts/OTF/NotoSansCJK-Regular.ttc"};
+        for (const char* path : paths) {
+            if (FILE* f = std::fopen(path, "rb")) {
+                std::fclose(f);
+                found = path;
+                break;
+            }
+        }
+#endif
+    }
+    if (found.empty()) return nullptr;
+    if (FILE* f = std::fopen(found.c_str(), "rb")) { // ImGui asserts on a file it cannot open
+        std::fclose(f);
+        return found.c_str();
+    }
+    return nullptr;
+}
+
 namespace VwOverlay {
 
 namespace {
@@ -785,6 +826,14 @@ void Init(const Vulkan::Instance& instance, vk::Format format, u32 image_count) 
     font_config.FontDataOwnedByAtlas = false;
     io.Fonts->AddFontFromMemoryTTF(const_cast<unsigned char*>(vw_font_ttf),
                                    int(vw_font_ttf_end - vw_font_ttf), 18.0f, &font_config);
+    if (const char* cjk = FindCjkFont()) {
+        ImFontConfig merge;
+        merge.MergeMode = true;
+        const bool merged = io.Fonts->AddFontFromFileTTF(cjk, 18.0f, &merge) != nullptr;
+        std::printf("Overlay: CJK font %s%s\n", cjk, merged ? "" : " could not be loaded");
+    } else {
+        std::printf("Overlay: no CJK font found (set VW_CJK_FONT); Japanese text shows as boxes\n");
+    }
 
     const vk::Instance vk_instance = instance.GetInstance();
     ImGui_ImplVulkan_LoadFunctions(

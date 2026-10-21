@@ -65,10 +65,14 @@
             <Line Type="bytes" Address="0x0164a0c1" Value="4d8bbc2480c100004d85ff0f846c2f21ffe9392e21ff498b9c24a0c100004885db0f84ad3221ffe9ed3021ff4d8bb424a0c100004d85f60f84973221ffe9193221ff498b9c2498c100004885db0f84493421ffe9c03221ff498b842498c100004885c00f84333421ffe9ec3321ff4d8bbc24b0c100004d85ff0f84873821ffe9bb3621ff4d8bbc24b0c100004d85ff0f84713821ffe9f33721ff4d8bbc24a8c100004d85ff0f84e53921ffe99a3821ff4d8bac2490c100004d85ed0f84383d21ffe9203b21ff498b9c2490c100004885db0f84223d21ffe9583c21ff498b842490c100004885c00f840c3d21ffe9be3c21ff4d8bac2488c100004d85ed0f84943e21ffe93f3d21ff"/>
         </PatchList>
     </Metadata>
-    <Metadata Title="City Shrouded in Shadow" Name="Skip Bad Submesh Indices" Note="FUN_0049fce0 walks an index array (this+0x60) into 0x348-byte elements (this+0x58). In the driving chapter an index read 0x3f800000 (1.0f), twice at the same place: fault at 0x49fdd4. The index load at 0x49fdb6 jumps to a stub at 0x124a1d0 that skips the entry (loop's next item, 0x49fe22) when the index is above 0xffff." Author="kyoei_toshi_pc" PatchVer="0.1" AppVer="01.00" AppElf="eboot.bin" isEnabled="true">
+    <Metadata Title="City Shrouded in Shadow" Name="Skip Bad Submesh Indices" Note="FUN_0049fce0 walks an index array (this+0x60) into 0x348-byte elements (this+0x58). In the driving chapter an index read 0x3f800000 (1.0f), twice at the same place: fault at 0x49fdd4. The index load at 0x49fdb6 jumps to a stub at 0x124a1d0 that skips the entry (loop's next item, 0x49fe22) when the index is above 0xffff. The same array is read by three more loops of the function (0x49fe5f, fault at 0x49fe6a with index 0x7ea7488 on a stage load; 0x4a0130; 0x4a0190): stubs at 0x124a1f0-0x124a247 skip to each loop's next item." Author="kyoei_toshi_pc" PatchVer="0.1" AppVer="01.00" AppElf="eboot.bin" isEnabled="true">
         <PatchList>
             <Line Type="bytes" Address="0x0089fdb6" Value="e915a4da00909090909090"/>
             <Line Type="bytes" Address="0x0164a1d0" Value="4a6334b64881feffff00000f87415c25ff4869c648030000e9d45b25ff"/>
+            <Line Type="bytes" Address="0x0089fe5f" Value="e98ca3da00909090909090"/>
+            <Line Type="bytes" Address="0x008a0130" Value="e9d7a0da00909090909090"/>
+            <Line Type="bytes" Address="0x008a0190" Value="e993a0da00909090909090909090"/>
+            <Line Type="bytes" Address="0x0164a1f0" Value="4a6304a0483dffff00000f87cc5e25ff4c69f848030000e95e5c25ff49630424483dffff00000f87605f25ff4869c048030000e9135f25ff49630424483dffff00000f87b65f25ff4c89f14869c048030000e9575f25ff"/>
         </PatchList>
     </Metadata>
 </Patch>

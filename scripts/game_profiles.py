@@ -19,6 +19,10 @@ PROFILES = {
         'native_modules': ('libSceNpToolkit2.prx', 'libSceSecure.prx'),
         # One per stage, loaded and unloaded by the game; all export the same function.
         'stage_modules': 'module/MasterORBIS/*/StageModule.prx',
+        # The game reads GPU results back on the CPU: a previous frame's copy (the port's
+        # default for Unicorn Overlord) left NULL entries in an NPC list during the prologue
+        # cutscenes (faults at 0x23c53b), a menu background black and a blur on screen.
+        'forced': {'VW_DEFERRED_READBACK': '0', 'VW_STALE_READBACK': '0'},
     },
 }
 

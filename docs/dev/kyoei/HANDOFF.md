@@ -70,6 +70,14 @@ without input (skipping the cutscene with Circle makes it earlier):
 | skip | game `0x45ec82` | NULL+0xaa; same caller chain `0x372def` → `0x23cfee` |
 | no input | host `0x07246cc3` (not a module) | NULL+0x30 on a host thread, after `StopRtdSkip()` |
 
+**Cause found for the 0x23c53b fault:** the port's deferred/stale GPU readbacks (CPU reads of
+GPU-written memory get the previous frame's copy, on by default for Unicorn Overlord). With both
+off the scripted cutscene skip passed twice without a fault where it had faulted every time
+(2026-10-21); the profile now forces them off (`forced` in `scripts/game_profiles.py`).
+Still to check with them off: the 0x45ec82 and host faults, the blur that stays after the
+mission title, the menu's black background with colored garbage, the fault after staying in
+the menu (player's report, 0x23c53b with readbacks on).
+
 The first cold-cache runs (slower) got past these points. Enforcing the game's thread
 affinity (each PS4 core on one host CPU) did not help: it faulted earlier. Only tested on an
 NVIDIA RTX 3090; the port has mostly run on AMD. Next: name the faulting host thread, check

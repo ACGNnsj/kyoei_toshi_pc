@@ -31,6 +31,9 @@ class ProfileTests(unittest.TestCase):
         self.assertIn('libSceSecure.prx', p['native_modules'])
         self.assertEqual(p['stage_modules'], 'module/MasterORBIS/*/StageModule.prx')
         self.assertNotIn('stage_modules', game_profiles.profile('CUSA36381'))
+        env = {'VW_DEFERRED_READBACK': '1', 'VW_STALE_READBACK': '1'}  # as from vw.ini
+        game_profiles.apply('CUSA03562', env)
+        self.assertEqual((env['VW_DEFERRED_READBACK'], env['VW_STALE_READBACK']), ('0', '0'))
 
 
 if __name__ == '__main__':

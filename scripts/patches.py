@@ -69,7 +69,9 @@ PATCHES_DIR=Path(__file__).resolve().parent.parent/'patches'
 # Built-in patch file per game, the app version its addresses are for and, when known, the
 # sha256 of the only eboot.bin they were checked against (another build of the same version has
 # its code elsewhere: byte writes there corrupt it).
-GAMES=[]  # Unicorn Overlord ships no built-in patches; user patch files still apply (patches/)
+# Unicorn Overlord ships no built-in patches; user patch files still apply (patches/).
+GAMES=[({'CUSA03562'},PATCHES_DIR/'Kyoei_Toshi.xml','01.00',
+        '42b058e57358cdb0516fb39ddafe583634b03d9987a7950f8fd0c317a8f3af83')]
 DMEM_RETAIL_MB=5056  # runtime_memory.c POOL_SIZE default
 
 

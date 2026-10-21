@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<!-- kyoei_toshi_pc: CUSA03562 APP_VER 01.00 eboot.bin with sha256
+     42b058e57358cdb0516fb39ddafe583634b03d9987a7950f8fd0c317a8f3af83 (scripts/patches.py checks it).
+     Addresses are eboot vaddr + 0x400000; see docs/dev/kyoei/HANDOFF.md. -->
+<Patch>
+    <TitleID>
+        <ID>CUSA03562</ID>
+    </TitleID>
+    <Metadata Title="City Shrouded in Shadow" Name="No GPU Stall Timeout" Note="FUN_004330b0 spins on a GPU label and, after 10,000,000 checks, prints 'Stall during rendering' and stops at int 0x41. On a PC CPU that is ~10 ms, shorter than the port's GPU translation needs when new shaders appear (an item handed to the player): the jne at 0x43312b becomes a jmp, so it waits for the label." Author="kyoei_toshi_pc" PatchVer="0.1" AppVer="01.00" AppElf="eboot.bin" isEnabled="true">
+        <PatchList>
+            <Line Type="bytes" Address="0x0083312b" Value="e98c00000090"/>
+        </PatchList>
+    </Metadata>
+</Patch>

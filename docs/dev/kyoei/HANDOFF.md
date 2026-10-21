@@ -146,11 +146,13 @@ correctly. Fallback idea: build the icon from the last presented frame.
 | No GPU Stall Timeout | the game's own int 0x41 after 10M spins on a GPU label (item handed over) |
 | Skip Constants For Unbound Shader | NULL shader in the seven per-stage data writers 0x45eaa0-0x45f3c0 (QTE, Continue) |
 | Skip Draw State For Unbound Shader | NULL shader at the seven per-stage blocks of the draw-state commit FUN_0045d060 (cutscene skip, 0x45dc7d) |
-| Skip Unloaded NPC List Entries | NULL entries of the NPC list in FUN_0023be90: 0x23c53b, 0x23cd42 and the sort search at 0x23c284 (stage load at 30 FPS) |
+| Skip Unloaded NPC List Entries | NULL entries of the NPC list: three reads in FUN_0023be90 and the same three in its two copies (0x238xxx, 0x23bxxx); faults at 0x23c53b, 0x23cd42, 0x2386eb (stage loads at 30 FPS) |
 
 The readback change made 0x23c53b rarer but did not remove it: these are the game's races,
 exposed by the PC's speed. Patches may also write the rest of a segment's last page
-(`patches.py` eboot_segments, `probe.c` patchable): 0x1249f6c-0x124a000 holds five stubs.
+(`patches.py` eboot_segments, `probe.c` patchable), and the loader maps the executable segment up
+to the next one (`prepare.load_end`): 0x1249f6c-0x124c000 (8 KiB) is a code cave; 0x1249f70-0x1249fd9
+and 0x124a000-0x124a0c1 are used.
 Still unguarded: reads of ctx+0xc1b8 (stage 7) in the writers when ctx+0xc613 is set, and
 0x45d62a (stage 5 at +0xa8). The third patch uses 0x433131-0x433191 (of 0x433131-0x4331bb) as a code cave: the stall
 path the first patch makes dead (its jmp is repeated in the third so it stands alone).

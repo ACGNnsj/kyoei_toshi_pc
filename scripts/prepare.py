@@ -125,6 +125,21 @@ def inspect_libc(path):
     return evidence
 
 
+PAGE = 0x1000
+
+
+def load_end(p, loads):
+    """Where a loadable segment ends for the loader and patches: an executable segment also
+    takes the unused pages up to the next segment (a code cave for game patches, mapped with
+    its protection); others end at their last page."""
+    end = (p['vaddr'] + p['memsz'] + PAGE - 1) & ~(PAGE - 1)
+    if p['flags'] & 1:
+        after = [q['vaddr'] for q in loads if q['vaddr'] >= p['vaddr'] + p['memsz']]
+        if after:
+            end = max(end, min(after) & ~(PAGE - 1))
+    return end
+
+
 def prepare(game, out):
     source = (game / 'eboot.bin').read_bytes()
     elf, header, ph, segments, missing = parse_self(source)
@@ -215,7 +230,8 @@ def prepare(game, out):
         f.write(struct.pack('<8sQQQQQQ', b'G3PROBE2', size, header[4], len(loads), len(relocs), len(names),
                             int(libc_evidence['init_env_is_ret'])))
         for p in loads:
-            f.write(struct.pack('<QQQ', p['vaddr'], p['memsz'], p['flags']))
+            memsz = load_end(p, loads) - p['vaddr'] if p['flags'] & 1 else p['memsz']
+            f.write(struct.pack('<QQQ', p['vaddr'], memsz, p['flags']))
         for name in names:
             encoded = name.encode()
             if len(encoded) >= 128:

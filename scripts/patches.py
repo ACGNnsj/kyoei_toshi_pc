@@ -25,19 +25,18 @@ def game_app_version(game):
         return None
 
 
-PAGE=0x1000
-
-
 def eboot_segments(elf):
-    """[(start, end)] a patch may write: each loadable segment and the rest of its last page (a
-    code cave mapped with the segment's protection; probe.c patchable() allows the same)."""
+    """[(start, end)] a patch may write: each loadable segment and the rest of its last page; the
+    executable one also the unused pages up to the next segment (code caves; prepare.load_end
+    gives the loader the same ends, probe.c patchable() checks them)."""
+    from prepare import load_end
     phoff,=struct.unpack_from('<Q',elf,0x20)
     phentsize,phnum=struct.unpack_from('<HH',elf,0x36)
-    segments=[]
+    loads=[]
     for i in range(phnum):
-        kind,_,_,vaddr,_,_,memsz,_=struct.unpack_from('<IIQQQQQQ',elf,phoff+i*phentsize)
-        if kind==1: segments.append((vaddr,(vaddr+memsz+PAGE-1)&~(PAGE-1)))
-    return segments
+        kind,flags,_,vaddr,_,_,memsz,_=struct.unpack_from('<IIQQQQQQ',elf,phoff+i*phentsize)
+        if kind in (1,0x61000010): loads.append(dict(type=kind,flags=flags,vaddr=vaddr,memsz=memsz))
+    return [(p['vaddr'],load_end(p,loads)) for p in loads if p['type']==1]
 
 
 def encode(line):

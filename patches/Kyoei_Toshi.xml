@@ -31,4 +31,18 @@
             <Line Type="bytes" Address="0x0063c280" Value="e9ec6e1f00909090909090909090"/>
         </PatchList>
     </Metadata>
+    <Metadata Title="City Shrouded in Shadow" Name="Skip Draw State For Unbound Shader" Note="FUN_0045d060 commits draw state per shader stage; each stage's block starts with 'cmpb $0, ctx+0xc250+stage' (dirty) and 'je skip', then reads the stage's shader (ctx+0xc180+stage*8) and dereferences it. Skipping a cutscene left stage 2 NULL: fault at 0x45dc7d. Each of the seven cmpb becomes a call to a 21-byte stub that also sets ZF when the shader is NULL, so the existing je skips the block. Stubs: 0x433191 and 0x4331a6 (the dead stall path; that jmp is repeated here) and 0x1249f70-0x1249fd9 (the rest of the code segment's last page)." Author="kyoei_toshi_pc" PatchVer="0.1" AppVer="01.00" AppElf="eboot.bin" isEnabled="true">
+        <PatchList>
+            <Line Type="bytes" Address="0x0083312b" Value="e98c00000090"/>
+            <Line Type="bytes" Address="0x0085cecc" Value="e8c062fdff90909090"/>
+            <Line Type="bytes" Address="0x0085d196" Value="e80b60fdff90909090"/>
+            <Line Type="bytes" Address="0x0085d395" Value="e8d6cbde0090909090"/>
+            <Line Type="bytes" Address="0x0085d7bc" Value="e8c4c7de0090909090"/>
+            <Line Type="bytes" Address="0x0085d9c7" Value="e8cec5de0090909090"/>
+            <Line Type="bytes" Address="0x0085dc5c" Value="e84ec3de0090909090"/>
+            <Line Type="bytes" Address="0x0085deba" Value="e805c1de0090909090"/>
+            <Line Type="bytes" Address="0x00833191" Value="4180bc2450c200000074094983bc2480c1000000c34180bc2454c200000074094983bc24a0c1000000c3"/>
+            <Line Type="bytes" Address="0x01649f70" Value="4180bc2453c200000074094983bc2498c1000000c34180bc2456c200000074094983bc24b0c1000000c34180bc2455c200000074094983bc24a8c1000000c34180bc2452c200000074094983bc2490c1000000c34180bc2451c200000074094983bc2488c1000000c3"/>
+        </PatchList>
+    </Metadata>
 </Patch>

@@ -322,6 +322,15 @@ static int mapped(Segment *segments, uint64_t count, uint64_t address, uint64_t 
             address - segments[i].address <= segments[i].size - bytes) return 1;
     return 0;
 }
+/* Patches may also use the rest of a segment's last page (a code cave): it is mapped with the
+ * segment's protection. scripts/patches.py allows the same range. */
+static int patchable(Segment *segments, uint64_t count, uint64_t address, uint64_t bytes) {
+    for (uint64_t i = 0; i < count; ++i) {
+        const uint64_t size = round_page(segments[i].size);
+        if (address >= segments[i].address && bytes <= size && address - segments[i].address <= size - bytes) return 1;
+    }
+    return 0;
+}
 /* Writes a jump from image+at to `stub`; the rest of the replaced bytes become nops (the stub
  * replays them). 0 when the stub is out of relative-jump range. */
 static int jump_reaches(uint64_t at, const unsigned char *stub) {
@@ -572,7 +581,7 @@ static void apply_patches(const char *path, Segment *segments, uint64_t ns, cons
     unsigned char data[4096];
     for (uint64_t i=0;i<count;++i) {
         uint64_t offset=read64(f), length=read64(f);
-        if (!length || length>sizeof(data) || !mapped(segments,ns,offset,length) || fread(data,1,length,f)!=length)
+        if (!length || length>sizeof(data) || !patchable(segments,ns,offset,length) || fread(data,1,length,f)!=length)
             fail("bad patch entry");
         uint64_t slots[sizeof(data)/8]; size_t nslots=0;
         for (uint64_t r=0;r<nr;++r) {

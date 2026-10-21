@@ -78,6 +78,13 @@ Still to check with them off: the 0x45ec82 and host faults, the blur that stays 
 mission title, the menu's black background with colored garbage, the fault after staying in
 the menu (player's report, 0x23c53b with readbacks on).
 
+**Cause found for the host faults (NULL+0x30 at 0x07xxxxxx):** that code is a shader's SRT
+walker (`flatten_extended_userdata_pass.cpp`, xbyak). A walker reading a pointer the game left
+NULL is meant to fault into `SrtWalkerSignalHandler`, which zeroes the load; the handler was only
+registered by `GenerateSrtProgram`, and with a warm pipeline cache every walker comes from
+`RegisterWalkerCode`, so it was never registered. Now registered by both (log: `GPU: SRT walker
+fault handler registered`; each catch logs `Patched SRT walker`). Upstream shadPS4 has the same gap.
+
 The first cold-cache runs (slower) got past these points. Enforcing the game's thread
 affinity (each PS4 core on one host CPU) did not help: it faulted earlier. Only tested on an
 NVIDIA RTX 3090; the port has mostly run on AMD. Next: name the faulting host thread, check

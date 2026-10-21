@@ -34,10 +34,31 @@ static const u8* g_srt_codegen_start = nullptr;
 // threads.
 static std::mutex g_srt_codegen_mutex;
 
+namespace {
+static bool SrtWalkerSignalHandler(void* context, void* fault_address);
+}
+
+// vw: a walker reading a pointer the game left NULL or unmapped (an unused resource) faults; the
+// handler patches that load to zero the register. Registered for the first walker of either
+// kind: those loaded from the pipeline cache (RegisterWalkerCode) never pass through
+// GenerateSrtProgram, so with a warm cache the handler was missing and the fault ended the game
+// (City Shrouded in Shadow, NULL+0x30). Call with g_srt_codegen_mutex held.
+static void RegisterSrtWalkerHandler() {
+    if (g_srt_codegen_start != nullptr) {
+        return;
+    }
+    g_srt_codegen_start = g_srt_codegen.getCode(); // the whole buffer: cached walkers too
+    // Call after the memory invalidation handler
+    constexpr u32 priority = 1;
+    Core::Signals::Instance()->RegisterAccessViolationHandler(SrtWalkerSignalHandler, priority);
+    std::printf("GPU: SRT walker fault handler registered\n");
+}
+
 namespace Shader {
 
 PFN_SrtWalker RegisterWalkerCode(const u8* ptr, size_t size) {
     std::scoped_lock lock{g_srt_codegen_mutex};
+    RegisterSrtWalkerHandler();
     const auto func_addr = (PFN_SrtWalker)g_srt_codegen.getCurr();
     g_srt_codegen.db(ptr, size);
     g_srt_codegen.ready();
@@ -647,13 +668,7 @@ static void GenerateSrtProgram(Info& info, PassInfo& pass_info) {
     std::scoped_lock lock{g_srt_codegen_mutex};
 
     // Register the signal handler for SRT walker, if not already registered
-    if (g_srt_codegen_start == nullptr) {
-        g_srt_codegen_start = c.getCurr();
-        auto* signals = Core::Signals::Instance();
-        // Call after the memory invalidation handler
-        constexpr u32 priority = 1;
-        signals->RegisterAccessViolationHandler(SrtWalkerSignalHandler, priority);
-    }
+    RegisterSrtWalkerHandler();
 
     info.srt_info.walker_func = c.getCurr<PFN_SrtWalker>();
     pass_info.dst_off_dw = NUM_USER_DATA_REGS;

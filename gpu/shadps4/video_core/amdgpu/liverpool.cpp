@@ -786,6 +786,22 @@ Liverpool::Task Liverpool::ProcessGraphics(std::span<const u32> dcb, std::span<c
         const auto* header = reinterpret_cast<const PM4Header*>(dcb.data());
         const u32 type = header->type;
 
+        if (type == 0 || type == 1) {
+            // vw: a command buffer the game submitted no longer holds packets here: where, what
+            // is around it, and the emulation's own writes near it (VW_WRITE_LOG=1).
+            const auto at = reinterpret_cast<uintptr_t>(header);
+            std::fprintf(stderr, "PM4: bad packet at %#llx, %#llx bytes into a command buffer at %#llx "
+                         "(%zu bytes left)\n", (unsigned long long)at,
+                         (unsigned long long)(at - base_addr), (unsigned long long)base_addr,
+                         dcb.size() * sizeof(u32));
+            const u32* words = dcb.data();
+            const size_t before = std::min<size_t>(16, (at - base_addr) / 4);
+            for (ptrdiff_t i = -ptrdiff_t(before); i < 16 && size_t(i + ptrdiff_t(before)) < before + dcb.size(); ++i) {
+                std::fprintf(stderr, "PM4: %+4td %08x%s\n", i, words[i], i == 0 ? "  <-" : "");
+            }
+            vwgpu_dump_writes_near(at, 64);
+            std::fflush(stderr);
+        }
         switch (type) {
         default:
             UNREACHABLE_MSG("Wrong PM4 type {}", type);

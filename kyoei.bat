@@ -15,6 +15,9 @@ set "VW_READBACK_LINEAR=1"
 rem Test: one GPU stage (draws recorded where the commands are read), so a frame's guest data
 rem is consumed before the game sees it done (fast-forward crash, white wedges).
 set "VW_DRAW_PIPE=0"
+rem Diagnostics: the GPU emulation's writes to game memory, listed when a command buffer turns
+rem out to hold garbage (the fast-forward crash).
+set "VW_WRITE_LOG=1"
 rem Diagnostics: F11 writes this frame's passes, draws and shaders to run_kyoei\user\captures.
 set "VW_FRAME_CAPTURE_KEY=1"
 set "VW_CAPTURE_DETAIL=1"

@@ -17,3 +17,4 @@ void NoteIntent(std::uint64_t address, const void* data, std::uint64_t size, Sou
 }
 
 extern "C" void vwgpu_dump_guest_writes(void* ucontext);
+extern "C" void vwgpu_dump_writes_near(std::uint64_t address, std::uint64_t size);

@@ -162,3 +162,30 @@ extern "C" void vwgpu_dump_guest_writes(void* ucontext) {
     }
     std::fprintf(stderr, "Write log: %llu writes logged\n", (unsigned long long)n);
 }
+
+// A command packet the GPU thread could not decode: the logged writes into or near it (did the
+// emulation write over a command buffer the game had submitted?).
+extern "C" void vwgpu_dump_writes_near(std::uint64_t address, std::uint64_t size) {
+    using namespace VwWriteLog;
+    if (Mode() == 0) {
+        std::fprintf(stderr, "Write log: off (VW_WRITE_LOG=1 lists the GPU's writes near %#llx)\n",
+                     (unsigned long long)address);
+        return;
+    }
+    const char* sources[] = {"backing",      "WriteData",           "fence",
+                             "EOP (decoded)", "WriteData (decoded)", "EOS (decoded)"};
+    const std::uint64_t now = __rdtsc(), n = head.load();
+    int shown = 0;
+    for (std::uint64_t i = n; i-- > (n > Size ? n - Size : 0) && shown < 64;) {
+        const Entry& e = ring[i % Size];
+        if (e.address < address + size + 0x1000 && address < e.address + e.size + 0x1000) {
+            std::fprintf(stderr, "Write log: near %s %#llx +%llu first %#llx tid %u, %.3f s ago\n",
+                         e.source < 6 ? sources[e.source] : "?", (unsigned long long)e.address,
+                         (unsigned long long)e.size, (unsigned long long)e.first, e.tid,
+                         double(now - e.tsc) / 3.0e9);
+            ++shown;
+        }
+    }
+    std::fprintf(stderr, "Write log: %d near %#llx of %llu writes logged\n", shown,
+                 (unsigned long long)address, (unsigned long long)n);
+}

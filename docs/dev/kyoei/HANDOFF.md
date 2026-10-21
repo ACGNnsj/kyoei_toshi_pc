@@ -121,3 +121,12 @@ the game's code would be the alternative for higher rates. `kyoei.bat` caps at 3
   0x80-aligned); with Relaxed buffer readbacks a CPU read gets stale data. `kyoei.bat` tests
   `VW_READBACKS=2` (Precise); not confirmed yet.
 - A flicker while the save list was open happened once, not again.
+
+## Save icons: deferred (2026-10-22, owner's choice)
+
+Still garbage after `vwgpu_read_back` (8721da4): the encoder's source (a heap buffer, pitch 960,
+different address each save) is not GPU-modified in the buffer cache. Likely the game reads a
+tiled render target on the CPU (thread 0x5d93b0 only swaps R/B and applies gamma; the job is
+filled near 0xb4ee30), and the texture cache writes back only linear or narrow images. A fix
+needs tiled write-back (re-tiling a downloaded image into guest memory). Saves themselves load
+correctly. Fallback idea: build the icon from the last presented frame.

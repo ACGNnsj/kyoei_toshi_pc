@@ -103,7 +103,10 @@ static void retarget(void) {
     __atomic_store_n(&vw_stage_target, target, __ATOMIC_RELEASE);
 }
 
-typedef int32_t (ABI *ModuleEntry)(uint64_t args, const void *argp, void *unused);
+/* DT_INIT and DT_FINI both take (args, argp, entry): a non-NULL entry is called (init tail-jumps
+ * to it, fini calls it) instead of the module's own module_start/module_stop. Always NULL here:
+ * a fini called with only two arguments called whatever rdx held (a stage change faulted). */
+typedef int32_t (ABI *ModuleEntry)(uint64_t args, const void *argp, void *entry);
 static ABI int32_t load_start_module(const char *path, uint64_t args, const void *argp, uint32_t flags,
                                      const void *opt, int32_t *result) {
     (void)flags; (void)opt;
@@ -135,7 +138,6 @@ static ABI int32_t load_start_module(const char *path, uint64_t args, const void
     pthread_mutex_unlock(&lock);
     return handle;
 }
-typedef int32_t (ABI *ModuleStop)(uint64_t args, const void *argp);
 static ABI int32_t stop_unload_module(int32_t handle, uint64_t args, const void *argp, uint32_t flags,
                                       const void *opt, int32_t *result) {
     (void)flags; (void)opt;
@@ -155,7 +157,7 @@ static ABI int32_t stop_unload_module(int32_t handle, uint64_t args, const void 
     retarget(); /* before its stop: the export is no longer called into */
     pthread_mutex_unlock(&lock);
     if (!loaded) return ERR(3);
-    int32_t stopped = s->fini ? ((ModuleStop)(image + s->fini))(args, argp) : 0;
+    int32_t stopped = s->fini ? ((ModuleEntry)(image + s->fini))(args, argp, NULL) : 0;
     printf("Runtime: sceKernelStopUnloadModule(%s): module stop returned %d\n", s->path, stopped);
     if (result) *result = stopped;
     return 0;

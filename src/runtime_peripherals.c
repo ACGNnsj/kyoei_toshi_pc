@@ -236,6 +236,10 @@ static ABI int32_t png_encode(void *handle, const PngEncodeParam *p, PngOutputIn
     start = w.at;
     put(&w, "\0\0\0\0IEND", 8);
     chunk_end(&w, start);
+    /* Where the picture came from: a game encodes a GPU-rendered capture (save icons), which the
+     * texture cache writes back only for linear or narrow images. */
+    printf("Runtime: PngEnc %ux%u pitch %u from %p (format %u, %s): %zu bytes%s\n", p->width, p->height, p->pitch,
+           (const void *)p->image, p->pixel_format, alpha ? "RGBA" : "RGB", w.at, w.overflow ? ", overflow" : "");
     if (w.overflow) return PNG_DATA_OVERFLOW;
     if (info) { info->data_size = (uint32_t)w.at; info->processed_height = p->height; }
     return (int32_t)w.at;

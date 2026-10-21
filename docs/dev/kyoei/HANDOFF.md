@@ -103,3 +103,10 @@ So the remaining NULL-resource faults (0x45ec82, 0x45f4d2, the vtable call to 0x
 game's own races, hidden on a PS4 by its low frame rate, rather than a runtime primitive. A
 frame cap is a legitimate fix for that; the best default (20? 30?) needs more runs. A patch of
 the game's code would be the alternative for higher rates. `kyoei.bat` caps at 30.
+
+## Confirmed by the owner (2026-10-22)
+
+- Name entry: the Japanese prompt and typed Japanese names show correctly with the merged CJK
+  font (`f43a261`).
+- `kyoei.bat` caps at 15 FPS for play testing (`f258c8f`); still open from earlier play: the blur
+  after the mission title, the menu's black background with colored garbage.

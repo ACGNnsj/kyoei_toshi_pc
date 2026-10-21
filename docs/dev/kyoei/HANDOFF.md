@@ -58,3 +58,20 @@ Frame dumps: `VW_FRAME_DUMP_TRIGGER=<file> VW_DUMP_DIR=<dir>`, touch the file, c
 3. Audio (the UO audio downmix work applies), movies (`finalizedPS4/movie`), saving and loading.
 4. Performance with `VW_FRAME_STATS=1 VW_VSYNC=0`; compare with bloodborne_pc's renderer work
    for 3D-specific problems if they show up.
+
+## Open: crashes in the prologue (2026-10-21)
+
+With a warm shader cache the game faults within 45-145 s, in different places each run, with or
+without input (skipping the cutscene with Circle makes it earlier):
+
+| Run | Where | What |
+|---|---|---|
+| skip | game `0x23c53b` (fn `0x23be90`) | iterating the list at `this+0x228` (count `+0x230`): an entry is NULL |
+| skip | game `0x45ec82` | NULL+0xaa; same caller chain `0x372def` → `0x23cfee` |
+| no input | host `0x07246cc3` (not a module) | NULL+0x30 on a host thread, after `StopRtdSkip()` |
+
+The first cold-cache runs (slower) got past these points. Enforcing the game's thread
+affinity (each PS4 core on one host CPU) did not help: it faulted earlier. Only tested on an
+NVIDIA RTX 3090; the port has mostly run on AMD. Next: name the faulting host thread, check
+whether the host fault is in the NVIDIA driver, and try `VW_PIPELINE_BINARIES=0` and the GPU
+readback options (deferred/stale readbacks may hand the game data a frame late).

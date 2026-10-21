@@ -15,9 +15,8 @@ set "VW_PS4_SCHEDULING=1"
 rem Diagnostics: F11 writes this frame's passes, draws and shaders to run_kyoei\user\captures.
 set "VW_FRAME_CAPTURE_KEY=1"
 set "VW_CAPTURE_DETAIL=1"
-rem The game draws to the display buffer more than once a frame, and the vertex explosions last
-rem a moment: one F11 records the next 120 display passes (about 2 s at 30 FPS).
-set "VW_CAPTURE_FRAMES=120"
+rem Display passes are rare in this game: 120 of them took 80 s and 250 MB; 6 keeps F11 short.
+set "VW_CAPTURE_FRAMES=6"
 rem Live switches for GPU optimizations: the scripts in toggles\ write this file while the game
 rem runs (re-read every 0.25 s). Every start begins with all of them on.
 set "VW_TOGGLE_FILE=%~dp0run_kyoei\toggles.txt"

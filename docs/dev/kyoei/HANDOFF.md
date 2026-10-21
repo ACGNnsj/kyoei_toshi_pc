@@ -225,3 +225,12 @@ Its only caller is the game's wrapper 0x4265a0 (writes at cb+0x10, `addq $0xc`),
 data: the cmd pointer used was stale (another writer advanced cb+0x10). None of the stubbed Gnm
 functions is called directly by the game. Next: read 0x434c00-0x435100 and 0x237f16 for a cached cmd
 pointer or a second thread on the same cb (ctx+0x80).
+
+0x426a10 is the game's allocateFromCommandBuffer (NOP header c0xx1000 + 0x6875xxxx marker, embedded data
+after it): floats inside a command buffer are expected. Hypothesis that fits every case: the game writes
+a command buffer again (the next frame) while the GPU thread is still reading the earlier submission; the
+bad packet is where the new frame's writing had got to. If so, the same reuse would make the GPU read the
+next frame's embedded constants (vertex explosions that do not depend on FPS). Test: `VW_DCB_CHECK=1`
+(in `kyoei_readlog_test.bat`) compares a corrupt buffer with a copy taken at submission. Note
+`VW_COPY_GPU_BUFFERS` is not a fix as it stands: SubmitDone resets its copy area while the GPU thread may
+still read an earlier copy.

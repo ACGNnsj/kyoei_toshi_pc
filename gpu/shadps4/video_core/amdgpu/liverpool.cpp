@@ -10,6 +10,11 @@
 #include "vw_copy.h"
 #include "vw_toggles.h"
 #include <cstdio>
+#include <algorithm>
+#include <array>
+#include <cstdlib>
+#include <mutex>
+#include <vector>
 #include <boost/preprocessor/stringize.hpp>
 
 #include "common/assert.h"
@@ -751,6 +756,89 @@ void ScanDcb(std::span<const u32> dcb, int depth) {
         st = DcbStats{};
     }
 }
+
+// vw: VW_DCB_CHECK=1 — a copy of each submitted draw command buffer. A bad packet compares
+// guest memory with what was submitted: a game that writes the buffer again (the next frame)
+// before the GPU thread has read it shows up as words changed since the submission.
+struct DcbSnapshot {
+    uintptr_t base = 0;
+    std::vector<u32> words;
+    u64 number = 0;
+    std::chrono::steady_clock::time_point at;
+};
+std::mutex dcb_snapshot_mutex;
+std::array<DcbSnapshot, 64> dcb_snapshots;
+u64 dcb_snapshot_count = 0;
+
+bool DcbCheck() {
+    static const bool enabled = [] {
+        const char* v = std::getenv("VW_DCB_CHECK");
+        return v && v[0] == '1';
+    }();
+    return enabled;
+}
+
+void NoteDcb(std::span<const u32> dcb) {
+    if (!DcbCheck() || dcb.empty()) {
+        return;
+    }
+    std::scoped_lock lk{dcb_snapshot_mutex};
+    auto& s = dcb_snapshots[dcb_snapshot_count % dcb_snapshots.size()];
+    s.base = reinterpret_cast<uintptr_t>(dcb.data());
+    s.words.assign(dcb.begin(), dcb.end());
+    s.number = dcb_snapshot_count++;
+    s.at = std::chrono::steady_clock::now();
+}
+
+void CompareDcb(uintptr_t base, uintptr_t at) {
+    if (!DcbCheck()) {
+        return;
+    }
+    std::scoped_lock lk{dcb_snapshot_mutex};
+    // Every logged submission of this buffer: more than one means the game wrote and submitted
+    // it again while the GPU thread was still reading an earlier one. The oldest is compared.
+    std::vector<const DcbSnapshot*> matches;
+    for (const auto& s : dcb_snapshots) {
+        if (s.base == base && !s.words.empty()) {
+            matches.push_back(&s);
+        }
+    }
+    if (matches.empty()) {
+        std::fprintf(stderr, "DCB check: %#llx is not a submitted buffer (nested?)\n",
+                     static_cast<unsigned long long>(base));
+        return;
+    }
+    std::ranges::sort(matches, {}, &DcbSnapshot::number);
+    std::fprintf(stderr, "DCB check: %zu logged submissions of this buffer (of the last %zu)\n",
+                 matches.size(), dcb_snapshots.size());
+    const DcbSnapshot* found = matches.front();
+    const auto* now = reinterpret_cast<const u32*>(base);
+    size_t changed = 0, first = SIZE_MAX, last = 0;
+    for (size_t i = 0; i < found->words.size(); ++i) {
+        if (now[i] != found->words[i]) {
+            ++changed;
+            first = std::min(first, i);
+            last = i;
+        }
+    }
+    const size_t index = (at - base) / 4;
+    const double ms = std::chrono::duration<double, std::milli>(
+                          std::chrono::steady_clock::now() - found->at).count();
+    std::fprintf(stderr,
+                 "DCB check: submission %llu of %zu words, %.1f ms and %llu submissions ago; "
+                 "%zu words changed since (first %#zx, last %#zx); bad packet word %#zx %s\n",
+                 static_cast<unsigned long long>(found->number), found->words.size(), ms,
+                 static_cast<unsigned long long>(dcb_snapshot_count - 1 - found->number), changed,
+                 changed ? first : 0, changed ? last : 0, index,
+                 index < found->words.size() && now[index] != found->words[index]
+                     ? "changed since the submission"
+                     : "as submitted");
+    for (size_t i = index >= 8 ? index - 8 : 0; i < std::min(index + 8, found->words.size()); ++i) {
+        std::fprintf(stderr, "DCB check: %+4td submitted %08x now %08x%s\n",
+                     ptrdiff_t(i) - ptrdiff_t(index), found->words[i], now[i],
+                     found->words[i] != now[i] ? "  *" : "");
+    }
+}
 } // namespace
 
 Liverpool::Task Liverpool::ProcessGraphics(std::span<const u32> dcb, std::span<const u32> ccb,
@@ -804,6 +892,7 @@ Liverpool::Task Liverpool::ProcessGraphics(std::span<const u32> dcb, std::span<c
             vwgpu_dump_writes_near(at, 64);
             runtime_read_log_near(at, 0x10000, "bad packet");
             runtime_read_log_near(base_addr, 0x10000, "command buffer");
+            CompareDcb(base_addr, at);
             std::fflush(stderr);
         }
         switch (type) {
@@ -1758,6 +1847,7 @@ void Liverpool::SubmitGfx(std::span<const u32> dcb, std::span<const u32> ccb) {
     if (EmulatorSettings.IsCopyGpuBuffers()) {
         std::tie(dcb, ccb) = CopyCmdBuffers(dcb, ccb);
     }
+    NoteDcb(dcb);
 
     // The copy for the draw preparation workers is made before taking the queue lock, which
     // the GPU thread needs to pick up work.

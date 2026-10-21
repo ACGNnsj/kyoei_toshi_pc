@@ -27,6 +27,9 @@ rem The vertex explosions stay at 15 FPS and after a reload: likely not a race b
 rem that is wrong from the start.
 set "VW_READ_LOG=1"
 set "VW_WRITE_LOG=1"
+rem A copy of each submitted command buffer: a corrupt one is compared with what the game
+rem submitted (did the game write it again before the GPU thread read it?).
+set "VW_DCB_CHECK=1"
 if not exist "out\vwport.exe" (
     echo out\vwport.exe is missing: build it first ^(bash build.sh in MSYS2 CLANG64^).
     pause

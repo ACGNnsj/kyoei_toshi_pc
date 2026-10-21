@@ -30,8 +30,13 @@ template <typename Func>
 void ForEachPacket(std::span<const u32> commands, Func&& func) {
     for (size_t at = 0; at < commands.size();) {
         const auto* header = reinterpret_cast<const AmdGpu::PM4Header*>(commands.data() + at);
-        if (header->type == 2) {
+        if (header->type == 2 || header->type == 1) {
             ++at;
+            continue;
+        }
+        if (header->type == 0) {
+            // vw: as Liverpool::ProcessGraphics, a stray type-0 packet and its values are skipped.
+            at += 1 + header->type0.NumWords();
             continue;
         }
         if (header->type != 3) {

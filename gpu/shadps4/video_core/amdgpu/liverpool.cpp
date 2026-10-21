@@ -786,9 +786,10 @@ Liverpool::Task Liverpool::ProcessGraphics(std::span<const u32> dcb, std::span<c
         const auto* header = reinterpret_cast<const PM4Header*>(dcb.data());
         const u32 type = header->type;
 
-        if (type == 0 || type == 1) {
-            // vw: a command buffer the game submitted no longer holds packets here: where, what
-            // is around it, and the emulation's own writes near it (VW_WRITE_LOG=1).
+        static std::atomic<int> odd_packets{0};
+        if ((type == 0 || type == 1) && odd_packets.fetch_add(1, std::memory_order_relaxed) < 4) {
+            // vw: where, what is around it, and the emulation's own writes near it
+            // (VW_WRITE_LOG=1); the first few only.
             const auto at = reinterpret_cast<uintptr_t>(header);
             std::fprintf(stderr, "PM4: bad packet at %#llx, %#llx bytes into a command buffer at %#llx "
                          "(%zu bytes left)\n", (unsigned long long)at,
@@ -806,10 +807,20 @@ Liverpool::Task Liverpool::ProcessGraphics(std::span<const u32> dcb, std::span<c
         default:
             UNREACHABLE_MSG("Wrong PM4 type {}", type);
             break;
-        case 0:
-            UNREACHABLE_MSG("Unimplemented PM4 type 0, base reg: {}, size: {}",
-                            header->type0.base.Value(), header->type0.NumWords());
-            break;
+        case 0: {
+            // vw: a type-0 packet writes registers by MMIO index; the command processor consumes
+            // its header and count+1 values and goes on. City Shrouded in Shadow leaves a stray
+            // 0x00000010 after a SET_CONTEXT_REG of IA_MULTI_VGT_PARAM: the PS4 eats the next
+            // packets as register values and is in step again a few packets later. Skip as it
+            // does (the register writes are not emulated).
+            const size_t words = std::min<size_t>(1 + header->type0.NumWords(), dcb.size());
+            dcb = NextPacket(dcb, words);
+            continue;
+        }
+        case 1:
+            // vw: undefined on GCN; one word is skipped rather than stopping the game.
+            dcb = NextPacket(dcb, 1);
+            continue;
         case 2:
             // Type-2 packet are used for padding purposes
             dcb = NextPacket(dcb, 1);

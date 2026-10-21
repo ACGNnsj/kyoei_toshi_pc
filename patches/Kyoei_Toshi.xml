@@ -11,9 +11,15 @@
             <Line Type="bytes" Address="0x0083312b" Value="e98c00000090"/>
         </PatchList>
     </Metadata>
-    <Metadata Title="City Shrouded in Shadow" Name="Skip Constants For Unbound Shader" Note="FUN_0045ec20 writes shader constants for a stage through the stage's bound shader (ctx+0xc180+stage*8). An NPC freed in the frame (after a QTE, Ev_201_C076) leaves that NULL and it faulted at 0x45ec82. The 49 bytes at 0x45ec4f are re-encoded with the same effect plus 'test r13,r13 / je 0x45eda4' (the function's exit)." Author="kyoei_toshi_pc" PatchVer="0.1" AppVer="01.00" AppElf="eboot.bin" isEnabled="true">
+    <Metadata Title="City Shrouded in Shadow" Name="Skip Constants For Unbound Shader" Note="FUN_0045eaa0..FUN_0045f3c0 (seven, one per resource kind) write data for a shader stage through the stage's bound shader (ctx+0xc180+stage*8). NPCs freed in the frame (after a QTE, Ev_201_C076; on Continue after a death) leave it NULL: faults at 0x45ec82 and 0x45f4d2. In each, the 49 bytes after 'test r14d,r14d / je exit' are re-encoded with the same effect plus 'test r13,r13 / je exit'." Author="kyoei_toshi_pc" PatchVer="0.1" AppVer="01.00" AppElf="eboot.bin" isEnabled="true">
         <PatchList>
+            <Line Type="bytes" Address="0x0085eaaf" Value="4d8bacc480c100004d85ed0f844401000069c8000600004863c9498d8c8c9000000048894dc083f8020f85c20000009090"/>
             <Line Type="bytes" Address="0x0085ec4f" Value="4d8bacc480c100004d85ed0f844401000069c8000600004863c9498d8c8c9000000048894dc083f8020f85c20000009090"/>
+            <Line Type="bytes" Address="0x0085edef" Value="4d8bacc480c100004d85ed0f842401000069c8000600004863c9498d8c8c9000000048894dc083f8020f85b20000009090"/>
+            <Line Type="bytes" Address="0x0085ef6f" Value="4d8bacc480c100004d85ed0f842401000069c8000600004863c9498d8c8c9000000048894dc083f8020f85b20000009090"/>
+            <Line Type="bytes" Address="0x0085f0ef" Value="4d8bacc480c100004d85ed0f842401000069c8000600004863c9498d8c8c9000000048894dc083f8020f85b20000009090"/>
+            <Line Type="bytes" Address="0x0085f26f" Value="4d8bacc480c100004d85ed0f842401000069c8000600004863c9498d8c8c9000000048894dc083f8020f85b20000009090"/>
+            <Line Type="bytes" Address="0x0085f3ef" Value="4d8bacc480c100004d85ed0f842401000069c8000600004863c9498d8c8c9000000048894dc083f8020f85b20000009090"/>
         </PatchList>
     </Metadata>
 </Patch>

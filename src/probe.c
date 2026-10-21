@@ -16,6 +16,7 @@
 #endif
 #ifdef _WIN32
 #include <windows.h>
+#include <tlhelp32.h>
 #else
 #include <sys/mman.h>
 #include <malloc.h>
@@ -116,8 +117,57 @@ static void describe_address(char *out, size_t size, uintptr_t address) {
     snprintf(out,size,"%p",(void *)address);
 }
 void runtime_describe_address(char *out, size_t size, uintptr_t address) { describe_address(out,size,address); }
+/* Every thread of the process, the port's own (GPU command, draw recording, compilers) too: the
+ * guest thread dump shows only guest threads. Each thread is suspended only while its frames are
+ * collected as raw addresses (it may hold the heap or loader lock); names come after resuming. */
+static void host_thread_dump(void) {
+    typedef HRESULT (WINAPI *GetDescription)(HANDLE, PWSTR *);
+    static GetDescription get_description;
+    if (!get_description) get_description=(GetDescription)(void *)GetProcAddress(GetModuleHandleA("kernel32.dll"),"GetThreadDescription");
+    const DWORD self=GetCurrentThreadId(), pid=GetCurrentProcessId();
+    HANDLE snapshot=CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD,0);
+    if (snapshot==INVALID_HANDLE_VALUE) return;
+    THREADENTRY32 entry={.dwSize=sizeof(entry)};
+    fputs("Host thread dump:\n",stderr);
+    for (BOOL more=Thread32First(snapshot,&entry); more; more=Thread32Next(snapshot,&entry)) {
+        if (entry.th32OwnerProcessID!=pid || entry.th32ThreadID==self) continue;
+        HANDLE h=OpenThread(THREAD_SUSPEND_RESUME|THREAD_GET_CONTEXT|THREAD_QUERY_LIMITED_INFORMATION,FALSE,entry.th32ThreadID);
+        if (!h) continue;
+        uintptr_t frames[24]; int n=0;
+        if (SuspendThread(h)!=(DWORD)-1) {
+            CONTEXT c; memset(&c,0,sizeof(c)); c.ContextFlags=CONTEXT_FULL;
+            if (GetThreadContext(h,&c)) {
+                while (n<24 && c.Rip) {
+                    frames[n++]=(uintptr_t)c.Rip;
+                    if (image && c.Rip-(uintptr_t)image<0x20000000) break; /* guest code: no unwind data */
+                    DWORD64 base=0;
+                    PRUNTIME_FUNCTION function=RtlLookupFunctionEntry(c.Rip,&base,NULL);
+                    if (!function) { c.Rip=*(DWORD64 *)c.Rsp; c.Rsp+=8; continue; } /* leaf */
+                    void *handler; DWORD64 frame;
+                    RtlVirtualUnwind(UNW_FLAG_NHANDLER,base,c.Rip,function,&c,&handler,&frame,NULL);
+                }
+            }
+            ResumeThread(h);
+        }
+        char name[128]="?";
+        PWSTR wide=NULL;
+        if (get_description && SUCCEEDED(get_description(h,&wide)) && wide) {
+            WideCharToMultiByte(CP_UTF8,0,wide,-1,name,sizeof(name),NULL,NULL);
+            LocalFree(wide);
+        }
+        CloseHandle(h);
+        fprintf(stderr,"  [host %lu %s]\n",(unsigned long)entry.th32ThreadID,name[0] ? name : "?");
+        for (int i=0;i<n;++i) {
+            char where[MAX_PATH+64];
+            describe_address(where,sizeof(where),frames[i]);
+            fprintf(stderr,"      %d %s\n",i,where);
+        }
+    }
+    CloseHandle(snapshot);
+    fflush(stderr);
+}
 static DWORD WINAPI hang_dump(void *seconds) {
-    for (;;) { Sleep((DWORD)(uintptr_t)seconds*1000); runtime_thread_dump(); runtime_report(); }
+    for (;;) { Sleep((DWORD)(uintptr_t)seconds*1000); runtime_thread_dump(); host_thread_dump(); runtime_report(); }
     return 0;
 }
 static int fatal_reported;

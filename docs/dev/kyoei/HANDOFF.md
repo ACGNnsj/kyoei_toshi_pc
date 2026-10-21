@@ -110,3 +110,14 @@ the game's code would be the alternative for higher rates. `kyoei.bat` caps at 3
   font (`f43a261`).
 - `kyoei.bat` caps at 15 FPS for play testing (`f258c8f`); still open from earlier play: the blur
   after the mission title, the menu's black background with colored garbage.
+
+## Play test, 2026-10-22 (owner, 15 FPS)
+
+- Fixed and confirmed: the blur in free movement and the black menu background
+  (`VW_READBACK_LINEAR=1`, now forced by the profile); no fault when an NPC hands over an item
+  (GPU stall timeout patch, `patches/Kyoei_Toshi.xml`); saving at a save point; loading from the
+  title; a stage unload and reload (DT_FINI now called with a NULL entry).
+- Save icons: garbage. The game encodes a 228x128 capture from a GPU-written buffer (pitch 960,
+  0x80-aligned); with Relaxed buffer readbacks a CPU read gets stale data. `kyoei.bat` tests
+  `VW_READBACKS=2` (Precise); not confirmed yet.
+- A flicker while the save list was open happened once, not again.

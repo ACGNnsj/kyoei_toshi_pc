@@ -8,7 +8,11 @@ function (host contracts first) and otherwise binds the native export.
 Exports are matched by (NID, library identity, module identity). Imports of
 libSceLibcInternal are served by libc.prx's same-NID exports: the internal
 library is not shipped with the game and exposes the same functions.
-Output: out/boot-linked.bin (format G3PROBE5) and out/link.json.
+Stage modules (a game profile's `stage_modules` glob) are PRXs the game loads and unloads itself
+with sceKernelLoadStartModule, several exporting the same library. They are placed and relocated
+here too, but stay out of the export table and the module start list: out/stages.bin tells the
+runtime where each one is (src/runtime_stage.c).
+Output: out/boot-linked.bin (format G3PROBE5), out/stages.bin and out/link.json.
 """
 import collections
 import hashlib
@@ -94,7 +98,20 @@ def patch_fs_loads(image, ph, base):
     return patched
 
 
-def link(game, out, module_names=DEFAULT_MODULES):
+# Where a game keeps the system modules it ships: sce_module/, or module/prx/ for those it loads
+# itself (City Shrouded in Shadow's libSceSecure.prx).
+MODULE_DIRS = ('sce_module', 'module/prx')
+
+
+def module_path(game, filename):
+    for folder in MODULE_DIRS:
+        path = Path(game) / folder / filename
+        if path.is_file():
+            return path
+    raise FileNotFoundError(f'{filename} is in none of {", ".join(MODULE_DIRS)}')
+
+
+def link(game, out, module_names=DEFAULT_MODULES, stage_glob=None):
     main = module(game / 'eboot.bin')
     raw = (out / 'boot.bin').read_bytes()
     magic, size, entry, ns, nr, ni, flags = unpack('<8s6Q', raw, 0)
@@ -127,8 +144,11 @@ def link(game, out, module_names=DEFAULT_MODULES):
     base = (size + 65535) & ~65535
     fs_patched = patch_fs_loads(image, main['ph'], 0)
     tls_module = 2
-    for filename in module_names:
-        m = module(game / 'sce_module' / filename)
+    stages = []
+    jobs = [(module_path(game, f), f, False) for f in module_names]
+    jobs += [(p, p.relative_to(game).as_posix(), True) for p in sorted(Path(game).glob(stage_glob or '')) if stage_glob]
+    for path, filename, deferred in jobs:
+        m = module(path)
         loads = [p for p in m['ph'] if p['type'] in (1, 0x61000010)]
         modsize = max(p['vaddr'] + p['memsz'] for p in loads)
         if base + modsize > 512 * 1024 * 1024:
@@ -143,6 +163,10 @@ def link(game, out, module_names=DEFAULT_MODULES):
             image[base + p['vaddr']:base + p['vaddr'] + p['filesz']] = span(m['elf'], p['offset'], p['filesz'])
             segments.append((base + p['vaddr'], p['memsz'], p['flags']))
         tls = next((p for p in m['ph'] if p['type'] == 7), None)
+        if deferred and tls:
+            if tls['memsz']:
+                raise ValueError(f'{filename}: stage module with TLS is unsupported')
+            tls = None
         module_id = 0
         if tls:
             if tls['filesz'] > tls['memsz'] or not mapped(tls['vaddr'], tls['memsz']):
@@ -178,8 +202,12 @@ def link(game, out, module_names=DEFAULT_MODULES):
                     relocs.append((target, rk, imported(symbol), addend))
             else:
                 raise ValueError(f'{filename}: unsupported relocation type {kind}')
-        count = 0
+        count, stage_exports = 0, []
         for s in m['symbols']:
+            if deferred:
+                if s['section'] and s['identity'] and s['type'] == 2:
+                    stage_exports.append(base + s['value'])
+                continue
             if s['section'] and s['binding'] in (1, 2) and s['identity'] and s['type'] in (1, 2):
                 if not mapped(s['value'], max(1, s['size'])):
                     raise ValueError(f'{filename}: export outside load segments')
@@ -190,6 +218,17 @@ def link(game, out, module_names=DEFAULT_MODULES):
                 by_nid[(s['identity'][0], s['identity'][1][0])].append(entry_value)
                 count += 1
         fs_patched += patch_fs_loads(image, m['ph'], base)
+        if deferred:
+            if len(stage_exports) != 1:
+                raise ValueError(f'{filename}: a stage module exports one function, not {len(stage_exports)}')
+            stages.append(dict(file=filename, base=base, size=modsize, init=base + m['tags'].get(12, 0),
+                               fini=base + m['tags'].get(13, 0), export=stage_exports[0], sha256=m['sha256'],
+                               # Its writable segments, restored to their linked bytes at each load.
+                               writable=[(base + p['vaddr'], p['memsz']) for p in loads if p['flags'] & 2]))
+            if len(stages[-1]['writable']) > 4:
+                raise ValueError(f'{filename}: more than 4 writable segments')
+            base = (base + modsize + 65535) & ~65535
+            continue
         table.append(dict(file=filename, base=base, size=modsize, init=base + m['tags'].get(12, 0),
                           tls_address=base + tls['vaddr'] if tls else 0, tls_memsz=tls['memsz'] if tls else 0,
                           tls_filesz=tls['filesz'] if tls else 0, tls_module=module_id,
@@ -233,14 +272,28 @@ def link(game, out, module_names=DEFAULT_MODULES):
         for relocation in relocs:
             f.write(struct.pack('<QQqq', *relocation))
         f.write(image)
-    report = dict(modules=[{k: (hex(v) if k in ('base', 'init', 'tls_address') else v) for k, v in t.items()} for t in table],
+    # Stage modules: the path the game loads each by (relative to /app0) and where it is, then the
+    # linked modules as resident entries (export 0): loading one of those again only gives a handle.
+    with (out / 'stages.bin').open('wb') as f:
+        f.write(struct.pack('<8sQ', b'VWSTAGE1', len(stages) + len(table)))
+        for t in stages + table:
+            if len(t['file'].encode()) >= 128:
+                raise ValueError('stage module path too long')
+            f.write(t['file'].encode().ljust(128, b'\0'))
+            writable = t.get('writable', [])
+            stage = 'export' in t
+            f.write(struct.pack('<5Q', t['base'], t['size'], t['init'] if stage else 0, t['fini'] if stage else 0,
+                                t['export'] if stage else 0))
+            f.write(struct.pack('<Q8Q', len(writable), *[v for r in writable + [(0, 0)] * (4 - len(writable)) for v in r]))
+    report = dict(stages=[{k: (hex(v) if k in ('base', 'init', 'fini', 'export') else v) for k, v in t.items()} for t in stages],
+                  modules=[{k: (hex(v) if k in ('base', 'init', 'tls_address') else v) for k, v in t.items()} for t in table],
                   bindings=len(bindings), imports=len(names), fs_loads_patched=fs_patched,
                   main_tls=dict(zip(('vaddr', 'filesz', 'memsz', 'align'), main_tls_values)),
                   unresolved_imports=unresolved)
     (out / 'link.json').write_text(json.dumps(report, indent=2) + '\n')
     summary = ', '.join(f"{t['file']}@{t['base']:#x}" for t in table)
     print(f'Linked modules: {summary}; {len(bindings)} native bindings, {len(unresolved)} imports left to the host runtime, '
-          f'fs->gs patched={fs_patched}')
+          f'fs->gs patched={fs_patched}; stage modules: {len(stages)}')
 
 
 if __name__ == '__main__':
@@ -254,4 +307,6 @@ if __name__ == '__main__':
         from game_profiles import profile
         from patches import game_title_id
         a.modules = [*DEFAULT_MODULES, *profile(game_title_id(a.game)).get('native_modules', ())]
-    link(a.game, a.out, a.modules)
+    from game_profiles import profile
+    from patches import game_title_id
+    link(a.game, a.out, a.modules, profile(game_title_id(a.game)).get('stage_modules'))

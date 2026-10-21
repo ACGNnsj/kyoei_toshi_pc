@@ -145,6 +145,24 @@ static ABI int32_t playgo_close(int32_t handle) {
     playgo_handle=0; return 0;
 }
 static ABI int32_t playgo_terminate(void) { playgo_handle=0; return 0; }
+/* Everything is installed: no time left and nothing to do. */
+static ABI int32_t playgo_eta(int32_t handle,const uint16_t *ids,uint32_t count,int64_t *eta) {
+    if (handle!=playgo_handle || !handle) return PLAYGO_BAD_HANDLE;
+    if (!ids || !eta) return PLAYGO_BAD_POINTER;
+    if (!count) return PLAYGO_BAD_SIZE;
+    *eta=0; return 0;
+}
+static ABI int32_t playgo_get_todo(int32_t handle,void *list,uint32_t count,uint32_t *entries) {
+    if (handle!=playgo_handle || !handle) return PLAYGO_BAD_HANDLE;
+    if (!list || !entries) return PLAYGO_BAD_POINTER;
+    if (!count) return PLAYGO_BAD_SIZE;
+    *entries=0; return 0;
+}
+static ABI int32_t report_abnormal_termination(const void *info) {
+    (void)info;
+    note("the game reported an abnormal termination (sceSystemServiceReportAbnormalTermination)");
+    return 0;
+}
 
 /* ---- DiscMap: the game is fully installed, no disc bitmap exists ---- */
 #define DISC_MAP_NO_BITMAP ((int32_t)0x81100004)
@@ -200,6 +218,9 @@ static const RuntimeExport services_exports[]={
     {"scePlayGoSetInstallSpeed",playgo_speed}, {"scePlayGoGetInstallSpeed",playgo_get_speed},
     {"scePlayGoGetProgress",playgo_progress}, {"scePlayGoSetToDoList",playgo_todo},
     {"scePlayGoClose",playgo_close}, {"scePlayGoTerminate",playgo_terminate}, {"sceMouseInit",ok_void},
+    {"scePlayGoGetEta",playgo_eta}, {"scePlayGoGetToDoList",playgo_get_todo},
+    {"sceSystemServiceReportAbnormalTermination",report_abnormal_termination},
+    {"sceShareUtilityAdvanceWakeUpShareMenuDefault",ok_void},
     {"sceMouseOpen",mouse_open}, {"sceMouseRead",mouse_read}, {"sceMouseClose",mouse_close},
     {"sceAudioInOpen",audio_in_open}, {"sceDiscMapIsRequestOnHDD",discmap_on_hdd},
     {"sceDiscMap_8A828CAEE7EDD5E9",discmap_8a82}, {"sceDiscMap_7C980FFB0AA27E7A",discmap_7c98},

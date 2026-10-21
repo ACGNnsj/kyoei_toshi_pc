@@ -727,7 +727,7 @@ int main(int argc, char **argv) {
     uint64_t capabilities = memcmp(magic, "G3PROBE1", 8) ? read64(f) : 0;
     if (capabilities & ~UINT64_C(1)) fail("unknown runtime capabilities");
     runtime_start(strict_imports ? 0 : capabilities);
-    if (!size || size > 512*1024*1024 || entry >= size || !ns || ns > 64 || nr > 1000000 || import_count > 100000)
+    if (!size || size > 512*1024*1024 || entry >= size || !ns || ns > 256 || nr > 1000000 || import_count > 100000)
         fail("boot file limits exceeded");
     int multi=!memcmp(magic,"G3PROBE5",8);
     int linked=!memcmp(magic,"G3PROBE3",8) || !memcmp(magic,"G3PROBE4",8) || multi;
@@ -879,6 +879,15 @@ int main(int argc, char **argv) {
         printf("Imports: %" PRIu64 " missing\n",missing);
         fflush(NULL);
         _exit(missing ? 1 : 0); /* no destructors: GPU threads are running */
+    }
+    {
+        /* stages.bin beside the boot file (link_modules.py): read after relocation, before
+         * patches, so that each stage module load restores its linked bytes. */
+        char table[4096];
+        const char *slash = strrchr(argv[1], '/'), *backslash = strrchr(argv[1], '\\');
+        if (backslash && (!slash || backslash > slash)) slash = backslash;
+        snprintf(table, sizeof(table), "%.*sstages.bin", slash ? (int)(slash - argv[1] + 1) : 0, argv[1]);
+        runtime_stage_configure(image, size, table);
     }
     if (patch_file) apply_patches(patch_file, segments, ns, relocs, nr);
     if (gpu_enabled) install_unicorn_render_scale(app0);

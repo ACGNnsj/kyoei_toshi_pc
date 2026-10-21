@@ -124,6 +124,7 @@ static int sleep_ns(uint64_t ns) {
     return 0;
 }
 static ABI int32_t kernel_usleep(uint32_t usec) { sleep_ns((uint64_t)usec*1000); return 0; }
+static ABI int32_t kernel_sleep(uint32_t seconds) { sleep_ns((uint64_t)seconds*1000000000); return 0; }
 static ABI int32_t posix_usleep(uint32_t usec) { sleep_ns((uint64_t)usec*1000); return 0; }
 static ABI uint32_t posix_sleep(uint32_t seconds) { sleep_ns((uint64_t)seconds*1000000000); return 0; }
 static ABI int32_t posix_nanosleep(const GuestTimespec *rq,GuestTimespec *rem) {
@@ -379,7 +380,7 @@ static const RuntimeExport exports[]={
     {"sceKernelGetProcessTime",process_time}, {"sceKernelGetProcessTimeCounter",process_time_counter},
     {"sceKernelGetProcessTimeCounterFrequency",process_time_frequency},
     {"sceKernelReadTsc",read_tsc}, {"sceKernelGetTscFrequency",tsc_frequency},
-    {"sceKernelUsleep",kernel_usleep}, {"usleep",posix_usleep}, {"sleep",posix_sleep},
+    {"sceKernelUsleep",kernel_usleep}, {"sceKernelSleep",kernel_sleep}, {"usleep",posix_usleep}, {"sleep",posix_sleep},
     {"_nanosleep",posix_nanosleep},
     {"sceKernelIsNeoMode",kernel_is_neo_mode}, {"sceKernelIsAddressSanitizerEnabled",kernel_false},
     {"sceKernelGetSanitizerMallocReplaceExternal",kernel_false},

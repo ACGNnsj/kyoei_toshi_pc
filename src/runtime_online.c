@@ -32,6 +32,8 @@ static ABI int32_t *net_errno_loc(void) { return &net_errno; }
 static ABI int32_t net_pool_create(const char *name,int size,int flags) { (void)name; (void)size; (void)flags; return new_id(); }
 static ABI int32_t net_pool_destroy(int id) { (void)id; return 0; }
 static ABI int32_t net_unreachable(void) { net_errno=51; return NET_ENETUNREACH; }
+/* libScePosix sockets (City Shrouded in Shadow): -1 with errno ENETUNREACH, as sceNet's. */
+static ABI int32_t posix_net_unreachable(void) { *runtime_errno()=51; return -1; }
 static ABI int32_t net_epoll_create(const char *name,int flags) { (void)name; (void)flags; return new_id(); }
 static ABI int32_t net_epoll_destroy(int id) { (void)id; return 0; }
 static ABI int32_t net_resolver_create(const char *name,int pool,int flags) { (void)name; (void)pool; (void)flags; return new_id(); }
@@ -158,6 +160,12 @@ static ABI int32_t http_uri_escape(char *out,uint64_t *required,uint64_t prepare
 static ABI int32_t tus_get_data(void) { return NP_SIGNED_OUT; }
 
 static const RuntimeExport online_exports[]={
+    {"socket",posix_net_unreachable}, {"bind",posix_net_unreachable}, {"listen",posix_net_unreachable},
+    {"accept",posix_net_unreachable}, {"recv",posix_net_unreachable}, {"send",posix_net_unreachable},
+    {"setsockopt",posix_net_unreachable}, {"shutdown",posix_net_unreachable},
+    {"sceNetCtlInit",ok_void}, {"sceNetCtlTerm",ok_void}, {"sceHttpAbortRequest",ok_void},
+    {"sceNpSnsFacebookCreateRequest",lib_init_id}, {"sceNpSnsFacebookDeleteRequest",ok_void},
+    {"sceNpSnsFacebookGetAccessToken",np_signed_out},
     {"sceNetInit",net_init}, {"sceNetTerm",net_term}, {"sceNetErrnoLoc",net_errno_loc},
     {"sceNetPoolCreate",net_pool_create}, {"sceNetPoolDestroy",net_pool_destroy},
     {"sceNetEpollCreate",net_epoll_create}, {"sceNetEpollDestroy",net_epoll_destroy},

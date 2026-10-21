@@ -468,6 +468,27 @@ static ABI int32_t value_serialize(const JValue *v, JString *out) {
 /* Set-up: MemAllocator's base constructor leaves the vtable to the game's derived class (the
  * allocations here use the host heap); Initializer has nothing to set up. */
 static ABI int32_t json_noop(void *self) { (void)self; return 0; }
+/* The rest City Shrouded in Shadow's eboot imports itself (its NpToolkit2 uses the ones above). */
+static ABI void array_init(JArray *a) { a->list=NULL; }
+static ABI void array_destroy(JArray *a) { array_free(a); }
+static ABI void array_clear(JArray *a) { list_clear(a->list); }
+static ABI void value_init_array(JValue *v, const JArray *array) {
+    v->node=node_new(J_ARRAY);
+    array_copy(&v->node->array,array);
+}
+static ABI void value_init_string(JValue *v, const JString *s) { value_init_text(v,string_c_str(s)); }
+static ABI int32_t value_set_object(JValue *v, const JObject *object) {
+    JNode *node=node_new(J_OBJECT);
+    object_copy(&node->object,object);
+    node_free(v->node); v->node=node;
+    return 0;
+}
+static ABI int32_t value_clear(JValue *v) { node_free(v->node); v->node=NULL; return 0; }
+/* MemAllocator::notifyError(int, size_t, void*): the default allocator only reports. */
+static ABI void allocator_notify_error(void *self, int32_t error, uint64_t size, void *user) {
+    (void)self; (void)user;
+    fprintf(stderr,"Runtime: sce::Json allocator error %d (%llu bytes)\n",error,(unsigned long long)size);
+}
 
 static const RuntimeExport exports[]={
     {"_ZN3sce4Json12MemAllocatorC2Ev",json_noop}, {"_ZN3sce4Json12MemAllocatorD2Ev",json_noop},
@@ -493,5 +514,10 @@ static const RuntimeExport exports[]={
     {"_ZN3sce4Json6ObjectD1Ev",object_destroy}, {"_ZN3sce4Json6ObjectaSERKS1_",object_assign},
     {"_ZN3sce4Json6Object5clearEv",object_clear}, {"_ZN3sce4Json6ObjectixERKNS0_6StringE",object_member},
     {"_ZN3sce4Json6Parser5parseERNS0_5ValueEPKcm",parser_parse},
+    {"_ZN3sce4Json5ArrayC1Ev",array_init}, {"_ZN3sce4Json5ArrayD1Ev",array_destroy},
+    {"_ZN3sce4Json5Array5clearEv",array_clear}, {"_ZN3sce4Json5ValueC1ERKNS0_5ArrayE",value_init_array},
+    {"_ZN3sce4Json5ValueC1ERKNS0_6StringE",value_init_string},
+    {"_ZN3sce4Json5Value3setERKNS0_6ObjectE",value_set_object}, {"_ZN3sce4Json5Value5clearEv",value_clear},
+    {"_ZN3sce4Json12MemAllocator11notifyErrorEimPv",allocator_notify_error},
 };
 uintptr_t runtime_json_resolve(const char *name) { return RUNTIME_LOOKUP(exports,name); }

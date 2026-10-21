@@ -8,6 +8,7 @@
 #define NOT_LOADED ((int32_t)0x805a1001)
 #define PARAMETER ((int32_t)0x80d90002)
 #define BUSY ((int32_t)0x80d90003)
+#define NOT_FOUND ((int32_t)0x80d90005)
 static unsigned refs, initialized, configured;
 static uint32_t parameters[5];
 static unsigned queries, lists;
@@ -89,6 +90,22 @@ static ABI int32_t addon_list(uint32_t service,void *list,uint32_t capacity,uint
     if (hits) *hits=0;
     ++lists; return 0;
 }
+static ABI int32_t addon_info(uint32_t service,const void *label,void *info) {
+    (void)service; (void)info;
+    require_initialized();
+    return label ? NOT_FOUND : PARAMETER;
+}
+static ABI int32_t addon_mount(uint32_t service,const void *label,void *mount_point) {
+    (void)service;
+    require_initialized();
+    return label && mount_point ? NOT_FOUND : PARAMETER;
+}
+static ABI int32_t addon_unmount(const void *mount_point) { return mount_point ? NOT_FOUND : PARAMETER; }
+static ABI int32_t download_space(const void *mount_point,uint64_t *kib) {
+    if (!mount_point || !kib) return PARAMETER;
+    *kib=1024*1024; /* 1 GiB */
+    return 0;
+}
 uintptr_t runtime_content_resolve(const char *name) {
     if (!strcmp(name,"g8cM39EUZ6o#libSceSysmodule")) return (uintptr_t)module_load;
     if (!strcmp(name,"fMP5NHUOaMk#libSceSysmodule")) return (uintptr_t)module_loaded;
@@ -98,6 +115,10 @@ uintptr_t runtime_content_resolve(const char *name) {
     if (!strcmp(name,"R9lA82OraNs#libSceAppContent")) return (uintptr_t)content_init;
     if (!strcmp(name,"99b82IKXpH4#libSceAppContent")) return (uintptr_t)param_int;
     if (!strcmp(name,"xnd8BJzAxmk#libSceAppContent")) return (uintptr_t)addon_list;
+    if (!strcmp(name,"m47juOmH0VE#libSceAppContent")) return (uintptr_t)addon_info;
+    if (!strcmp(name,"VANhIWcqYak#libSceAppContent")) return (uintptr_t)addon_mount;
+    if (!strcmp(name,"3rHWaV-1KC4#libSceAppContent")) return (uintptr_t)addon_unmount;
+    if (!strcmp(name,"Gl6w5i0JokY#libSceAppContent")) return (uintptr_t)download_space;
     return 0;
 }
 void runtime_content_report(void) {

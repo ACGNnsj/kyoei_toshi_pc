@@ -210,6 +210,22 @@ static ABI int32_t save_umount(const MountPoint *point) {
     pthread_mutex_unlock(&lock);
     return slot>=0 ? 0 : ERR_NOT_FOUND;
 }
+static ABI int32_t save_umount_with_backup(const MountPoint *point) { return save_umount(point); }
+static ABI int32_t save_check_backup(const void *check) {
+    if (!initialized) return ERR_NOT_INITIALIZED;
+    return check ? ERR_NOT_FOUND : ERR_PARAMETER;
+}
+static ABI int32_t save_restore_backup(const void *restore) {
+    if (!initialized) return ERR_NOT_INITIALIZED;
+    return restore ? ERR_NOT_FOUND : ERR_PARAMETER;
+}
+/* Mount, save and delete finish before they return: progress is always complete. */
+static ABI int32_t save_get_progress(float *progress) {
+    if (!progress) return ERR_PARAMETER;
+    *progress=1.0f;
+    return 0;
+}
+static ABI int32_t save_clear_progress(void) { return 0; }
 static ABI int32_t save_set_param(const MountPoint *point, uint32_t type, const void *buffer, uint64_t size) {
     if (!initialized) return ERR_NOT_INITIALIZED;
     if (!buffer) return ERR_PARAMETER;
@@ -355,6 +371,9 @@ static const RuntimeExport exports[]={
     {"sceSaveDataInitialize3",save_initialize}, {"sceSaveDataTerminate",save_terminate},
     {"sceSaveDataMount",save_mount}, {"sceSaveDataMount2",save_mount2},
     {"sceSaveDataTransferringMount",save_transferring_mount}, {"sceSaveDataUmount",save_umount},
+    {"sceSaveDataUmountWithBackup",save_umount_with_backup}, {"sceSaveDataCheckBackupData",save_check_backup},
+    {"sceSaveDataRestoreBackupData",save_restore_backup}, {"sceSaveDataGetProgress",save_get_progress},
+    {"sceSaveDataClearProgress",save_clear_progress},
     {"sceSaveDataSetParam",save_set_param}, {"sceSaveDataSaveIcon",save_icon}, {"sceSaveDataDelete",save_delete},
     {"sceSaveDataDirNameSearch",save_search}, {"sceSaveDataGetMountInfo",save_mount_info},
     {"sceSaveDataSetupSaveDataMemory",memory_setup}, {"sceSaveDataGetSaveDataMemory",memory_get},

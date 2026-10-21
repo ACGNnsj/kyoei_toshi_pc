@@ -525,6 +525,14 @@ static void sample(PadData *d) {
     }
 }
 
+static ABI int32_t pad_get_handle(int32_t user, int32_t type, int32_t index) {
+    if (!initialized) return ERR_NOT_INITIALIZED;
+    if (user!=1 || (type!=0 && type!=2) || index) return ERR_INVALID_ARG;
+    pthread_mutex_lock(&lock);
+    int is_open=opened;
+    pthread_mutex_unlock(&lock);
+    return is_open ? PAD_HANDLE : ERR_INVALID_HANDLE;
+}
 static ABI int32_t pad_init(void) { pthread_mutex_lock(&lock); initialized=1; pthread_mutex_unlock(&lock); return 0; }
 static ABI int32_t pad_open(int32_t user, int32_t type, int32_t index, const void *param) {
     (void)param;
@@ -589,7 +597,7 @@ static ABI int32_t pad_light_bar(int32_t handle, const uint8_t *rgb) {
 }
 static const RuntimeExport exports[]={
     {"scePadSetLightBar",pad_light_bar}, {"scePadResetLightBar",pad_ok_handle},
-    {"scePadInit",pad_init}, {"scePadOpen",pad_open}, {"scePadClose",pad_close},
+    {"scePadInit",pad_init}, {"scePadOpen",pad_open}, {"scePadGetHandle",pad_get_handle}, {"scePadClose",pad_close},
     {"scePadReadState",pad_read_state}, {"scePadRead",pad_read},
     {"scePadGetControllerInformation",pad_info}, {"scePadSetVibration",pad_vibration},
     {"scePadResetOrientation",pad_ok_handle},

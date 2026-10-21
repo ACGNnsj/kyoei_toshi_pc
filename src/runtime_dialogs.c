@@ -13,7 +13,9 @@
 /* ---- Common dialogs: nothing is displayed; an opened dialog finishes. ---- */
 typedef struct { const char *name; int initialized, status; uint32_t button; } Dialog;
 static Dialog dialogs[]={{"CommonDialog",0,0,0},{"MsgDialog",0,0,0},{"SaveDataDialog",0,0,0},
-                         {"NpProfileDialog",0,0,0},{"NpCommerceDialog",0,0,0},{"ImeDialog",0,0,0}};
+                         {"NpProfileDialog",0,0,0},{"NpCommerceDialog",0,0,0},{"ImeDialog",0,0,0},
+                         {"PlayGoDialog",0,0,0},{"HmdSetupDialog",0,0,0},{"GameCustomDataDialog",0,0,0},
+                         {"NpSnsFacebookDialog",0,0,0}};
 #define DIALOG_RUNNING 2
 #define DIALOG_FINISHED 3
 #define DIALOG_NOT_FINISHED ((int32_t)0x80B80005)
@@ -65,6 +67,20 @@ static int32_t dialog_term(int i) {
     static ABI int32_t tag##_status(void) { return dialog_status(i); } \
     static ABI int32_t tag##_term(void) { return dialog_term(i); }
 DIALOG(profile,3) DIALOG(commerce,4)
+DIALOG(playgo_dialog,6) DIALOG(hmd_setup,7) DIALOG(custom_data,8) DIALOG(facebook,9)
+/* The result's first word: PlayGo's wait finishes at once (every chunk is installed, OK); the
+ * VR setup, custom game data and Facebook dialogs are closed by the player (user cancelled). */
+#define COMMON_RESULT_USER_CANCELED 1
+static int32_t dialog_result_code(int i, void *out, int32_t code) {
+    if (dialogs[i].status!=DIALOG_FINISHED) return DIALOG_NOT_FINISHED;
+    if (!out) return DIALOG_ARG_NULL;
+    memcpy(out,&code,4);
+    return 0;
+}
+static ABI int32_t playgo_dialog_result(void *out) { return dialog_result_code(6,out,0); }
+static ABI int32_t hmd_setup_result(void *out) { return dialog_result_code(7,out,COMMON_RESULT_USER_CANCELED); }
+static ABI int32_t custom_data_result(void *out) { return dialog_result_code(8,out,COMMON_RESULT_USER_CANCELED); }
+static ABI int32_t facebook_result(void *out) { return dialog_result_code(9,out,COMMON_RESULT_USER_CANCELED); }
 /* OrbisMsgDialogParam: BaseParam (48 bytes), size, mode (2 = progress bar).
  * OrbisSaveDataDialogParam: BaseParam, int32 size, mode (5 = progress bar). */
 static int32_t dialog_open_mode(int i, const unsigned char *param, size_t mode_offset, uint32_t progress_mode) {
@@ -318,5 +334,16 @@ static const RuntimeExport dialogs_exports[]={
     {"sceInvitationDialogTerminate",ok_void}, {"sceInvitationDialogGetResultA",np_signed_out},
     {"sceInvitationDialogOpenA",np_signed_out}, {"sceInvitationDialogUpdateStatus",np_signed_out},
     {"sceNpCommerceDialogGetResult",np_signed_out}, {"sceNpProfileDialogOpenA",np_signed_out},
+    {"scePlayGoDialogInitialize",playgo_dialog_init}, {"scePlayGoDialogOpen",playgo_dialog_open},
+    {"scePlayGoDialogUpdateStatus",playgo_dialog_status}, {"scePlayGoDialogGetResult",playgo_dialog_result},
+    {"scePlayGoDialogTerminate",playgo_dialog_term}, {"sceHmdSetupDialogInitialize",hmd_setup_init},
+    {"sceHmdSetupDialogOpen",hmd_setup_open}, {"sceHmdSetupDialogUpdateStatus",hmd_setup_status},
+    {"sceHmdSetupDialogGetResult",hmd_setup_result}, {"sceHmdSetupDialogTerminate",hmd_setup_term},
+    {"sceGameCustomDataDialogInitialize",custom_data_init}, {"sceGameCustomDataDialogOpenA",custom_data_open},
+    {"sceGameCustomDataDialogUpdateStatus",custom_data_status},
+    {"sceGameCustomDataDialogGetResultA",custom_data_result}, {"sceGameCustomDataDialogTerminate",custom_data_term},
+    {"sceNpSnsFacebookDialogInitialize",facebook_init}, {"sceNpSnsFacebookDialogOpen",facebook_open},
+    {"sceNpSnsFacebookDialogUpdateStatus",facebook_status}, {"sceNpSnsFacebookDialogGetResult",facebook_result},
+    {"sceNpSnsFacebookDialogTerminate",facebook_term},
 };
 uintptr_t runtime_dialogs_resolve(const char *name) { return RUNTIME_LOOKUP(dialogs_exports,name); }

@@ -231,6 +231,9 @@ uintptr_t runtime_resolve(const char *name, int is_data) {
     if (!strcmp(name, "959qrazPIrg#libkernel")) return (uintptr_t)guest_procparam;
     if (!strcmp(name, "p5EcQeEeJAE#libkernel")) return (uintptr_t)guest_set_heap_api;
     if (!strcmp(name, "NWtTN10cJzE#libSceLibcInternalExt")) return (uintptr_t)heap_trace_info;
+    /* Before runtime_kernel: its sceKernelStopUnloadModule knows no loaded modules. */
+    uintptr_t stage = runtime_stage_resolve(name);
+    if (stage) return stage;
     uintptr_t mutex = runtime_mutex_resolve(name);
     if (mutex) return mutex;
     uintptr_t thread = runtime_thread_resolve(name);
@@ -253,6 +256,8 @@ uintptr_t runtime_resolve(const char *name, int is_data) {
     if (services) return services;
     uintptr_t online = runtime_online_resolve(name);
     if (online) return online;
+    uintptr_t peripherals = runtime_peripherals_resolve(name);
+    if (peripherals) return peripherals;
     uintptr_t dialogs = runtime_dialogs_resolve(name);
     if (dialogs) return dialogs;
     uintptr_t ajm = runtime_ajm_resolve(name);

@@ -58,6 +58,10 @@ typedef struct { const char *name; void *function; } RuntimeExport;
 const char *runtime_symbol(const char *nid);
 uintptr_t runtime_lookup(const RuntimeExport *table, size_t count, const char *nid);
 uintptr_t runtime_kernel_resolve(const char *name);
+/* Modules the game loads itself (runtime_stage.c, out/stages.bin from link_modules.py). */
+void runtime_stage_configure(unsigned char *image, uint64_t image_size, const char *table);
+uintptr_t runtime_stage_resolve(const char *name);
+uintptr_t runtime_peripherals_resolve(const char *name);
 uintptr_t runtime_file_resolve(const char *name);
 uintptr_t runtime_services_resolve(const char *name);
 uintptr_t runtime_online_resolve(const char *name);

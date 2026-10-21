@@ -51,6 +51,14 @@ GAMES = {
         'name': 'Unicorn Overlord', 'title': 'Unicorn Overlord', 'run_dir': 'run_uo',
         'colors': {'bg': '#0a1222', 'gold': '#c8a254', 'gold_hi': '#f0d48a'},
     },
+    'kyoei': {
+        'title_id': 'CUSA03562', 'app_version': '01.00',
+        'version_hint': 'the Japanese release (APP_VER 01.00)',
+        'name': 'City Shrouded in Shadow', 'title': 'Kyoei Toshi', 'run_dir': 'run_kyoei',
+        # The release feed (scripts/updates.py) is Unicorn Overlord's: never offer it here.
+        'updates': False,
+        'colors': {'bg': '#10141a', 'gold': '#d08a3a', 'gold_hi': '#f2b871'},
+    },
 }
 
 
@@ -456,7 +464,7 @@ def check_for_update(game_info, data, settings):
     """Packaged builds: offers a newer release and applies it. Returns only when the game should
     start as it is (no update, declined, offline, failed)."""
     import updates
-    if not FROZEN or not updates.setting_enabled(data / 'vw.ini'):
+    if not FROZEN or not game_info.get('updates', True) or not updates.setting_enabled(data / 'vw.ini'):
         return
     appimage = os.environ.get('APPIMAGE')
     if not WINDOWS and not appimage:

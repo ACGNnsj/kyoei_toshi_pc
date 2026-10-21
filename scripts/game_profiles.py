@@ -14,6 +14,12 @@ PROFILES = {
         # through the PSN C APIs, which answer as signed out.
         'native_modules': ('libSceNpToolkit2.prx', 'libSceNpCppWebApi.prx', 'libSceJobManager.prx'),
     },
+    'CUSA03562': {  # City Shrouded in Shadow (巨影都市, Japan)
+        # NpToolkit2 (SDK 4.5) as for Unicorn Overlord; libSceSecure.prx comes from module/prx/.
+        'native_modules': ('libSceNpToolkit2.prx', 'libSceSecure.prx'),
+        # One per stage, loaded and unloaded by the game; all export the same function.
+        'stage_modules': 'module/MasterORBIS/*/StageModule.prx',
+    },
 }
 
 

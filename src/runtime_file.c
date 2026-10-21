@@ -437,11 +437,57 @@ static void touch_for_write(void *buffer,uint64_t size) {
         *b=*b;
     }
 }
+/* VW_READ_LOG=1: the last 65536 file reads into guest memory (destination, size, file offset,
+ * file). A fault or a bad GPU packet lists the reads near its addresses (runtime_read_log_near):
+ * game data that a read wrote over, or read from the wrong place, shows up there. */
+typedef struct { uintptr_t dest; uint64_t size, offset; int64_t got; uint64_t seq; char path[88]; } ReadRecord;
+#define READ_LOG_SIZE 65536
+static ReadRecord *read_log;
+static uint64_t read_log_head;
+static int read_log_enabled(void) {
+    static int enabled=-1;
+    if (enabled<0) {
+        const char *v=getenv("VW_READ_LOG");
+        enabled=v && v[0]=='1';
+        if (enabled) read_log=calloc(READ_LOG_SIZE,sizeof(ReadRecord));
+        if (!read_log) enabled=0;
+    }
+    return enabled;
+}
+static void read_log_note(int fd,const void *buffer,uint64_t size,int64_t offset,int64_t got) {
+    if (!read_log_enabled()) return;
+    uint64_t seq=__atomic_fetch_add(&read_log_head,1,__ATOMIC_RELAXED);
+    ReadRecord *r=&read_log[seq%READ_LOG_SIZE];
+    r->dest=(uintptr_t)buffer; r->size=size; r->offset=(uint64_t)offset; r->got=got; r->seq=seq;
+    File *f=get(fd);
+    const char *path=f ? f->path : "?";
+    size_t length=strlen(path);
+    /* The end of the path names the file. */
+    strncpy(r->path,length>=sizeof(r->path) ? path+length-(sizeof(r->path)-1) : path,sizeof(r->path)-1);
+    r->path[sizeof(r->path)-1]=0;
+}
+void runtime_read_log_near(uintptr_t address,uint64_t radius,const char *label) {
+    if (!read_log_enabled() || address<0x10000) return;
+    uint64_t head=__atomic_load_n(&read_log_head,__ATOMIC_RELAXED), shown=0;
+    for (uint64_t i=head; i-- > (head>READ_LOG_SIZE ? head-READ_LOG_SIZE : 0) && shown<8;) {
+        const ReadRecord *r=&read_log[i%READ_LOG_SIZE];
+        if (r->seq!=i || r->got<=0) continue;
+        uintptr_t end=r->dest+(uint64_t)r->got;
+        if (address+radius<r->dest || end+radius<address) continue;
+        fprintf(stderr,"Read log: %s %#llx: read %llu of %llu bytes at %#llx +%llu (file offset %#llx), %llu reads ago: %s\n",
+                label,(unsigned long long)address,(unsigned long long)r->got,(unsigned long long)r->size,
+                (unsigned long long)r->dest,(unsigned long long)r->got,(unsigned long long)r->offset,
+                (unsigned long long)(head-1-i),r->path);
+        ++shown;
+    }
+}
 static int64_t do_read(int fd,void *buffer,uint64_t size) {
     int h=host_fd(fd);
     if (h<0) return -EBADF;
     touch_for_write(buffer,size);
+    int64_t position=read_log_enabled() ? host_lseek(h,0,SEEK_CUR) : 0;
     ssize_t n=host_read(h,buffer,size);
+    read_log_note(fd,buffer,size,position,n);
     if (n<0) { if (audio_trace()) printf("Audio trace: read(fd %d, %llu) failed, errno %d\n",fd,(unsigned long long)size,errno); return -errno; }
     __atomic_add_fetch(&reads,1,__ATOMIC_RELAXED); __atomic_add_fetch(&bytes_read,(uint64_t)n,__ATOMIC_RELAXED);
     return n;
@@ -451,6 +497,7 @@ static int64_t do_pread(int fd,void *buffer,uint64_t size,int64_t offset) {
     if (h<0) return -EBADF;
     touch_for_write(buffer,size);
     ssize_t n=pread(h,buffer,size,offset);
+    read_log_note(fd,buffer,size,offset,n);
     if (n<0) { if (audio_trace()) printf("Audio trace: pread(fd %d, %llu @%lld) failed, errno %d\n",fd,(unsigned long long)size,(long long)offset,errno); return -errno; }
     __atomic_add_fetch(&reads,1,__ATOMIC_RELAXED); __atomic_add_fetch(&bytes_read,(uint64_t)n,__ATOMIC_RELAXED);
     return n;

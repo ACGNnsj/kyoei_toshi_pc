@@ -188,6 +188,13 @@ static LONG fatal_exception(EXCEPTION_POINTERS *info) {
     fprintf(stderr,"  r8=%016llx  r9=%016llx r10=%016llx r11=%016llx\n  r12=%016llx r13=%016llx r14=%016llx r15=%016llx\n",
             c->R8,c->R9,c->R10,c->R11,c->R12,c->R13,c->R14,c->R15);
     if (gpu_enabled) vwgpu_dump_guest_writes(info);
+    {
+        const DWORD64 regs[]={c->Rax,c->Rbx,c->Rcx,c->Rdx,c->Rsi,c->Rdi,c->R8,c->R9,c->R10,c->R11,c->R12,c->R13,c->R14,c->R15};
+        const char *names[]={"rax","rbx","rcx","rdx","rsi","rdi","r8","r9","r10","r11","r12","r13","r14","r15"};
+        for (int i=0;i<14;++i) runtime_read_log_near((uintptr_t)regs[i],0x10000,names[i]);
+        if (record->ExceptionCode==EXCEPTION_ACCESS_VIOLATION && record->NumberParameters>=2)
+            runtime_read_log_near((uintptr_t)record->ExceptionInformation[1],0x10000,"fault address");
+    }
     /* rbp chain (guest and host code keep frame pointers). */
     uintptr_t rbp=(uintptr_t)c->Rbp;
     for (int depth=0; depth<24 && rbp; ++depth) {

@@ -74,6 +74,8 @@ int runtime_file_translate(const char *guest, char *out, size_t size);
 int64_t runtime_file_open(const char *path, int flags, int mode);
 int64_t runtime_file_close(int fd);
 int64_t runtime_file_read(int fd, void *buffer, uint64_t size);
+/* VW_READ_LOG=1: prints the logged file reads near address (runtime_file.c). */
+void runtime_read_log_near(uintptr_t address, uint64_t radius, const char *label);
 int64_t runtime_file_pread(int fd, void *buffer, uint64_t size, int64_t offset);
 int64_t runtime_file_write(int fd, const void *buffer, uint64_t size);
 int64_t runtime_file_lseek(int fd, int64_t offset, int whence);

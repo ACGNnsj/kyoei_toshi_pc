@@ -209,3 +209,10 @@ started; **the vertex explosions were still there**, and the game faulted soon a
 +8 pointer was NULL). Precise readbacks change neither the explosions nor the bad index lists: stale
 GPU data is ruled out for both. Next test: `kyoei_15fps_test.bat` (Relaxed, 15 FPS) in the driving
 chapter: gone at 15 FPS means timing (a game race); still there means the emulation.
+
+Owner's 15 FPS run (log run-20261022-061006): the vertex explosions were there while driving, after
+getting off the truck, and again after saving and reloading there (Mothra circles the whole stage).
+After 800 s: a corrupt command buffer (`Unknown PM4 type 3 opcode 0xd`, the words around it floats:
+1.0f, 10.0f, 128.0f). Not a race then: data wrong from the start, or overwritten the same way each
+time. Next test: `kyoei_readlog_test.bat` (30 FPS, `VW_READ_LOG=1` + `VW_WRITE_LOG=1`): a fault or a bad
+packet lists the file reads (runtime_file.c) and GPU writes near the damaged data.

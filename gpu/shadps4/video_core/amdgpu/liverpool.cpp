@@ -24,6 +24,7 @@
 #include "core/platform.h"
 #include "video_core/amdgpu/liverpool.h"
 #include "vw_write_log.h"
+extern "C" void runtime_read_log_near(uintptr_t address, uint64_t radius, const char* label);
 #include "video_core/amdgpu/pm4_cmds.h"
 #include "video_core/renderdoc.h"
 #include "video_core/renderer_vulkan/vk_rasterizer.h"
@@ -801,6 +802,8 @@ Liverpool::Task Liverpool::ProcessGraphics(std::span<const u32> dcb, std::span<c
                 std::fprintf(stderr, "PM4: %+4td %08x%s\n", i, words[i], i == 0 ? "  <-" : "");
             }
             vwgpu_dump_writes_near(at, 64);
+            runtime_read_log_near(at, 0x10000, "bad packet");
+            runtime_read_log_near(base_addr, 0x10000, "command buffer");
             std::fflush(stderr);
         }
         switch (type) {

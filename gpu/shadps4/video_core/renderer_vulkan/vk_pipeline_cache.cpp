@@ -863,6 +863,8 @@ bool PipelineCache::RefreshGraphicsKey(PipelineSelection& sel) {
     key.depth_clip_enable = regs.clipper_control.ZclipEnable();
     key.clip_space = regs.clipper_control.clip_space;
     key.provoking_vtx_last = regs.polygon_control.provoking_vtx_last;
+    key.alpha_to_coverage =
+        (regs.db_alpha_to_mask & 1) && !regs.depth_shader_control.alpha_to_mask_disable;
     key.prim_type = regs.primitive_type;
     key.polygon_mode = regs.polygon_control.PolyMode();
     key.patch_control_points =

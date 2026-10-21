@@ -141,6 +141,9 @@ GraphicsPipeline::GraphicsPipeline(
                 key.num_samples, instance.GetColorSampleCounts() & instance.GetDepthSampleCounts()),
             .sampleShadingEnable =
                 fs_info.addr_flags.persp_sample_ena || fs_info.addr_flags.linear_sample_ena,
+            // vw: with one sample the coverage follows the alpha (a cut-out), as close as Vulkan
+            // gets to the PS4's dithered alpha-to-mask.
+            .alphaToCoverageEnable = key.alpha_to_coverage,
         };
     }
 

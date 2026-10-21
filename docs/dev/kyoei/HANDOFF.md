@@ -176,3 +176,15 @@ records the owning thread per context and prints both stacks on overlap), then s
 - `VW_DRAW_PIPE=0` changed nothing for the crashes or the white wedges and lengthened loads.
 - F11 captures with the draw pipeline off held only the last two passes (present, clear): the
   capture tool needs a look before it can find the wedges' draw.
+
+## Precise readbacks: the boot hang (2026-10-22)
+
+`VW_READBACKS=2` hung the boot at about 3 s. The guest thread dump showed a thread in
+`sceKernelWaitEqueue` (from 0x437988: the GPU's end-of-pipe event) and the main thread waiting on
+it. The host thread dump (symbolized with `llvm-symbolizer --obj=out/vwport.exe`) showed the cause:
+`shadPS4:GpuCommandProcessor` spinning in `Scheduler::WaitDeferredSignals` (liverpool.cpp:191), the
+signal waiting for a copy-thread job, and `vw:Copy0` inside the fault handler, in
+`BufferCache::ReadMemory` -> `SendCommand` to the GPU thread. Precise mode read-protects a range as
+soon as a binding marks it GPU-modified, which can happen before a copy queued for it runs: the copy
+thread faults on its own source. Fix: queued copies (`CopyQueuedGuest`, buffer_cache.cpp) read
+through the backing view in Precise mode. `kyoei_precise_test.bat` is the test.

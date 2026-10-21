@@ -36,6 +36,12 @@ broke here will break again for the next 3D game. Details: `docs/dev/kyoei/HANDO
   Depth-of-field autofocus and menu backgrounds need small render targets written back:
   `VW_READBACK_LINEAR=2` (8x8 or less). Writing back every linear image (=1) risks late writes
   over memory the game reused.
+- **Precise readbacks** (`VW_READBACKS=2`) read-protect GPU-written pages; a read fault sends
+  a download to the GPU thread and waits. A helper thread (the copy threads) that reads guest
+  memory while the GPU thread waits for it deadlocks: queued copies read the backing view.
+  How it was found: guest dump (a thread in `sceKernelWaitEqueue`), then `VW_HANG_DUMP` host
+  thread dump symbolized with `llvm-symbolizer --obj=out/vwport.exe` (GPU thread spinning in
+  `WaitDeferredSignals`, `vw:Copy0` inside a fault handler in `SendCommand`).
 - **Alpha to coverage** (`DB_ALPHA_TO_MASK`, 0xA2DC) was never read: hair and eyelashes
   rendered as opaque blocks. Now a pipeline key bit.
 - **SRT walker fault handler** was registered only for freshly compiled shaders; with a warm

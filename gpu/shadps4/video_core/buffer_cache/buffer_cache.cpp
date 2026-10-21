@@ -118,10 +118,25 @@ void BufferCache::InvalidateMemory(VAddr device_addr, u64 size, bool assume_lock
 // pages marked CPU-modified without being written only cost an upload when bound.
 // Item: context = BufferCache, source = guest address, destination = host pointer, size,
 // extra = the Buffer whose mapping holds the destination (flushed after the copy).
+//
+// vw: Precise readbacks (VW_READBACKS=2) protect a range against reads as soon as a binding
+// marks it GPU-modified (RegionManager::ChangeRegionState), which can be before a copy queued
+// for it runs. The copy thread then faults, and its read fault waits for the GPU thread, which
+// spins in Scheduler::WaitDeferredSignals for that copy: a hang at boot. Queued copies read
+// through the backing view, which has no protection; they take the data as it was when they
+// were queued, and the GPU writes nothing there before submission waits for them.
+static void CopyQueuedGuest(Core::MemoryManager* memory, VAddr source, u8* dest, u64 size) {
+    if (EmulatorSettings.GetReadbacksMode() == GpuReadbacksMode::Precise &&
+        runtime_memory_read_backing(source, dest, size)) {
+        return;
+    }
+    memory->CopySparseMemory(source, dest, size);
+}
+
 void BufferCache::RunGuestCopy(const VwCopy::Item& item) {
     auto* cache = static_cast<BufferCache*>(item.context);
     auto* dst = reinterpret_cast<u8*>(item.destination);
-    cache->memory->CopySparseMemory(item.source, dst, item.size);
+    CopyQueuedGuest(cache->memory, item.source, dst, item.size);
     auto* buffer = reinterpret_cast<Buffer*>(item.extra);
     buffer->Flush(dst - buffer->mapped_data.data(), item.size);
 }
@@ -601,7 +616,7 @@ const Buffer* BufferCache::UploadCopies(const Buffer* arena, std::span<vk::Buffe
         const auto launch = [&] {
             VwCopy::Async([group, memory = memory, staging] {
                 for (const auto& copy : *group) {
-                    memory->CopySparseMemory(copy.source, copy.destination, copy.size);
+                    CopyQueuedGuest(memory, copy.source, copy.destination, copy.size);
                 }
                 staging.Flush();
             });

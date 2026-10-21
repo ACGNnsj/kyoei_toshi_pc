@@ -202,3 +202,10 @@ Whether Precise removes the vertex explosions is still open (the run never reach
 Next test: patch "Skip Bad Bone Indices" (both loops of 0x498950: index above 0xffff skips the entry;
 stubs 0x124a250-0x124a290) so the Precise run gets through the stage203 load and the owner can see
 whether the vertex explosions remain with Precise readbacks.
+
+Owner's Precise run with the bone patch (log run-20261022-060421): the stage203 load passed and driving
+started; **the vertex explosions were still there**, and the game faulted soon after at 0x4753c0
+(rsi=0x40: FUN_0049fce0's second loop, 0x49fec8, element index 7154 passed the 0xffff bound and its
++8 pointer was NULL). Precise readbacks change neither the explosions nor the bad index lists: stale
+GPU data is ruled out for both. Next test: `kyoei_15fps_test.bat` (Relaxed, 15 FPS) in the driving
+chapter: gone at 15 FPS means timing (a game race); still there means the emulation.

@@ -42,6 +42,8 @@ broke here will break again for the next 3D game. Details: `docs/dev/kyoei/HANDO
   How it was found: guest dump (a thread in `sceKernelWaitEqueue`), then `VW_HANG_DUMP` host
   thread dump symbolized with `llvm-symbolizer --obj=out/vwport.exe` (GPU thread spinning in
   `WaitDeferredSignals`, `vw:Copy0` inside a fault handler in `SendCommand`).
+- Before building on "the CPU reads stale GPU data", test it: run with Precise readbacks. Here
+  it changed nothing (vertex explosions, garbage index lists), which ruled the theory out.
 - **Alpha to coverage** (`DB_ALPHA_TO_MASK`, 0xA2DC) was never read: hair and eyelashes
   rendered as opaque blocks. Now a pipeline key bit.
 - **SRT walker fault handler** was registered only for freshly compiled shaders; with a warm

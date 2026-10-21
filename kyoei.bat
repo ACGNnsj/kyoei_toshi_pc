@@ -18,6 +18,10 @@ set "VW_CAPTURE_DETAIL=1"
 rem The game draws to the display buffer more than once a frame, and the vertex explosions last
 rem a moment: one F11 records the next 120 display passes (about 2 s at 30 FPS).
 set "VW_CAPTURE_FRAMES=120"
+rem Live switches for GPU optimizations: the scripts in toggles\ write this file while the game
+rem runs (re-read every 0.25 s). Every start begins with all of them on.
+set "VW_TOGGLE_FILE=%~dp0run_kyoei\toggles.txt"
+>"%VW_TOGGLE_FILE%" echo 0
 if not exist "out\vwport.exe" (
     echo out\vwport.exe is missing: build it first ^(bash build.sh in MSYS2 CLANG64^).
     pause

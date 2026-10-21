@@ -11,6 +11,9 @@ set "VW_FPS_LIMIT=15"
 rem Test: GPU results in small (width 8 or less) or linear render targets written back for the
 rem CPU, as for an autofocus depth probe (the blur in free movement, the menu background).
 set "VW_READBACK_LINEAR=1"
+rem Test: Precise buffer readbacks (2): a CPU read of a buffer the GPU wrote waits for the GPU's
+rem data; Relaxed (1, the default) only on CPU writes (save icons read a GPU-made capture).
+set "VW_READBACKS=2"
 if not exist "out\vwport.exe" (
     echo out\vwport.exe is missing: build it first ^(bash build.sh in MSYS2 CLANG64^).
     pause

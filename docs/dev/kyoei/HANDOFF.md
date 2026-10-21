@@ -90,3 +90,16 @@ affinity (each PS4 core on one host CPU) did not help: it faulted earlier. Only 
 NVIDIA RTX 3090; the port has mostly run on AMD. Next: name the faulting host thread, check
 whether the host fault is in the NVIDIA driver, and try `VW_PIPELINE_BINARIES=0` and the GPU
 readback options (deferred/stale readbacks may hand the game data a frame late).
+
+## Frame rate and the remaining faults (2026-10-22)
+
+The game sets flip rate 0 every frame and paces itself; on this PC it runs at 60. The PS4
+release ran at about 15-20 FPS in many scenes (the owner remembers it, and reviews criticised
+it). Same scripted run (new game, cutscene skipped), faults by frame cap (`VW_FPS_LIMIT`):
+60 FPS about 1 in 2, 30 FPS 1 in 3 (0x45f4d2), 15 FPS 0 in 3. Game time follows real time
+(the name entry comes at ~160 s at 15 and 30 FPS).
+
+So the remaining NULL-resource faults (0x45ec82, 0x45f4d2, the vtable call to 0x1) may be the
+game's own races, hidden on a PS4 by its low frame rate, rather than a runtime primitive. A
+frame cap is a legitimate fix for that; the best default (20? 30?) needs more runs. A patch of
+the game's code would be the alternative for higher rates. `kyoei.bat` caps at 30.

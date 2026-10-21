@@ -6,6 +6,8 @@ cd /d "%~dp0"
 set "VW_GAME_DIR=D:\_PS4_PC\Kyoei Toshi(巨影都市) PC\CUSA03562"
 set "VW_DATA_DIR=%~dp0run_kyoei"
 set "VW_UPDATES=0"
+rem Frame rate cap: 30 as on a PS4 (the game runs at 60 on a fast PC). 0 = no cap.
+set "VW_FPS_LIMIT=30"
 if not exist "out\vwport.exe" (
     echo out\vwport.exe is missing: build it first ^(bash build.sh in MSYS2 CLANG64^).
     pause

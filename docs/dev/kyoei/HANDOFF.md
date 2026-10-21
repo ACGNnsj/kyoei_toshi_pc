@@ -156,3 +156,23 @@ and 0x124a000-0x124a0c1 are used.
 Still unguarded: reads of ctx+0xc1b8 (stage 7) in the writers when ctx+0xc613 is set, and
 0x45d62a (stage 5 at +0xa8). The third patch uses 0x433131-0x433191 (of 0x433131-0x4331bb) as a code cave: the stall
 path the first patch makes dead (its jmp is repeated in the third so it stands alone).
+
+## Root cause of the random crashes (2026-10-22)
+
+With `VW_DRAW_PIPE=0` and only tiny images written back, the fast-forward crash came back as a
+corrupted command buffer: `PM4: bad packet` with `VW_WRITE_LOG=1` showed **no** write by the
+emulation near it (0 of 1.7M logged writes), and the words show two packets overlapping
+(`c0016900 2aa ff` written over the first three dwords of a `c0027600 4e lo hi`, leaving `hi`).
+Two game threads write one draw context at once. The same explains the NULL shader seen
+mid-block (0x45ddf5), the NULL NPC list entries and the 1.0f index at 0x49fdd4: the NULL
+patches only stop symptoms. The runtime's mutex, cond, sema and rwlock match PS4 semantics
+(reviewed). At 15 FPS the owner played long sessions without a crash; the PS4 ran this game at
+about 15-20 FPS. `kyoei.bat` is back at 15 FPS with the draw pipeline on.
+
+Next for a real fix: find the two threads (a guard at the draw-state entry points that
+records the owning thread per context and prints both stacks on overlap), then serialize them.
+
+- `VW_READBACK_LINEAR=2` (profile): blur and menu background still right; 1 is not needed.
+- `VW_DRAW_PIPE=0` changed nothing for the crashes or the white wedges and lengthened loads.
+- F11 captures with the draw pipeline off held only the last two passes (present, clear): the
+  capture tool needs a look before it can find the wedges' draw.

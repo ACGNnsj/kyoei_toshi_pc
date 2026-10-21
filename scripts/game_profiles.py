@@ -23,9 +23,9 @@ PROFILES = {
         # default for Unicorn Overlord) left NULL entries in an NPC list during the prologue
         # cutscenes (faults at 0x23c53b), a menu background black and a blur on screen.
         # Render targets written back for the CPU: the free-movement depth of field focuses
-        # from one (everything stayed blurred), and the menu background (black). Testing 2 (only
-        # images of 8x8 or less): with 1 a large linear image written back late may be what
-        # overwrote game data with 1.0f (index read as 0x3f800000 at 0x49fdd4).
+        # from one (everything stayed blurred), and the menu background (black). 2: only images
+        # of 8x8 or less (both still right, owner 2026-10-22); 1 also wrote back every linear
+        # image, which could land late on memory the game had reused.
         'forced': {'VW_DEFERRED_READBACK': '0', 'VW_STALE_READBACK': '0', 'VW_READBACK_LINEAR': '2'},
     },
 }

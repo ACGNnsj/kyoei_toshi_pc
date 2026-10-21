@@ -190,3 +190,11 @@ thread faults on its own source. Fix (untested): queued copies (`CopyQueuedGuest
 through the backing view in Precise mode; large copies no longer split across the copy threads
 (the caller handles its faults inline); a speculative reader (draw preparation) gives up on a read
 fault instead of waiting for the GPU thread (probe.c). `kyoei_precise_test.bat` is the test.
+
+Owner's run with the fix (log run-20261022-054948): the boot hang is gone; a save loaded straight into
+the driving stage (stage203). 4 s into its loading: read fault at 0x498bf6, in the second bone loop
+of the function that also calls 0x4753c0 (the earlier driving-chapter crash). The int index read
+from [rdi+0x60][44] was 0x08450390, the low half of a pointer next to rbx (0x100844c310): the index
+list holds other data. Precise readbacks did not prevent it, so this crash is not stale GPU data:
+it is the same class as the other garbage index lists (a game race or a freed and reused list).
+Whether Precise removes the vertex explosions is still open (the run never reached driving).

@@ -38,7 +38,7 @@
             <Line Type="bytes" Address="0x0164a000" Value="488b3cf24885ff0f8401e4fefec5f82e87e80000000f870ce4fefee9eee3fefe4e8b24f84d85e40f8473eefefe4183bc2434010000000f8404e7fefee9b5e6fefe488b14d84885d20f8422f0fefec5f82e82d80000000f8314f0fefee9f8eefefe488b3cf24885ff0f846011fffec5f82e87e80000000f876b11fffee94d11fffe4c8b34c84d85f60f84921bfffe4183be34010000000f846c14fffee92b14fffe488b14d84885d20f84221dfffec5f82e82d80000000f83141dfffee9ff1bfffe"/>
         </PatchList>
     </Metadata>
-    <Metadata Title="City Shrouded in Shadow" Name="Skip Draw State For Unbound Shader" Note="FUN_0045d060 commits draw state per shader stage; each stage's block starts with 'cmpb $0, ctx+0xc250+stage' (dirty) and 'je skip', then reads the stage's shader (ctx+0xc180+stage*8) and dereferences it. Skipping a cutscene left stage 2 NULL: fault at 0x45dc7d. Each of the seven cmpb becomes a call to a 21-byte stub that also sets ZF when the shader is NULL, so the existing je skips the block. Stubs: 0x433191 and 0x4331a6 (the dead stall path; that jmp is repeated here) and 0x1249f70-0x1249fd9 (the rest of the code segment's last page)." Author="kyoei_toshi_pc" PatchVer="0.1" AppVer="01.00" AppElf="eboot.bin" isEnabled="true">
+    <Metadata Title="City Shrouded in Shadow" Name="Skip Draw State For Unbound Shader" Note="FUN_0045d060 commits draw state per shader stage; each stage's block starts with 'cmpb $0, ctx+0xc250+stage' (dirty) and 'je skip', then reads the stage's shader (ctx+0xc180+stage*8) and dereferences it. Skipping a cutscene left stage 2 NULL: fault at 0x45dc7d. Each of the seven cmpb becomes a call to a 21-byte stub that also sets ZF when the shader is NULL, so the existing je skips the block. Another thread can clear the shader during a block (fault at 0x45ddf5 on a re-read): each of the twelve re-reads inside the blocks jumps to a stub that leaves for the block's end when it is NULL (stubs 0x124a0c1-0x124a1c9). Stubs: 0x433191 and 0x4331a6 (the dead stall path; that jmp is repeated here) and 0x1249f70-0x1249fd9 (the rest of the code segment's last page)." Author="kyoei_toshi_pc" PatchVer="0.1" AppVer="01.00" AppElf="eboot.bin" isEnabled="true">
         <PatchList>
             <Line Type="bytes" Address="0x0083312b" Value="e98c00000090"/>
             <Line Type="bytes" Address="0x0085cecc" Value="e8c062fdff90909090"/>
@@ -50,6 +50,19 @@
             <Line Type="bytes" Address="0x0085deba" Value="e805c1de0090909090"/>
             <Line Type="bytes" Address="0x00833191" Value="4180bc2450c200000074094983bc2480c1000000c34180bc2454c200000074094983bc24a0c1000000c3"/>
             <Line Type="bytes" Address="0x01649f70" Value="4180bc2453c200000074094983bc2498c1000000c34180bc2456c200000074094983bc24b0c1000000c34180bc2455c200000074094983bc24a8c1000000c34180bc2452c200000074094983bc2490c1000000c34180bc2451c200000074094983bc2488c1000000c3"/>
+            <Line Type="bytes" Address="0x0085cf08" Value="e9b4d1de00909090"/>
+            <Line Type="bytes" Address="0x0085d1d2" Value="e900cfde00909090"/>
+            <Line Type="bytes" Address="0x0085d314" Value="e9d4cdde00909090"/>
+            <Line Type="bytes" Address="0x0085d3d1" Value="e92dcdde00909090"/>
+            <Line Type="bytes" Address="0x0085d513" Value="e901ccde00909090"/>
+            <Line Type="bytes" Address="0x0085d7f8" Value="e932c9de00909090"/>
+            <Line Type="bytes" Address="0x0085d946" Value="e9fac7de00909090"/>
+            <Line Type="bytes" Address="0x0085da03" Value="e953c7de00909090"/>
+            <Line Type="bytes" Address="0x0085dc9f" Value="e9cdc4de00909090"/>
+            <Line Type="bytes" Address="0x0085dded" Value="e995c3de00909090"/>
+            <Line Type="bytes" Address="0x0085de69" Value="e92fc3de00909090"/>
+            <Line Type="bytes" Address="0x0085df00" Value="e9aec2de00909090"/>
+            <Line Type="bytes" Address="0x0164a0c1" Value="4d8bbc2480c100004d85ff0f846c2f21ffe9392e21ff498b9c24a0c100004885db0f84ad3221ffe9ed3021ff4d8bb424a0c100004d85f60f84973221ffe9193221ff498b9c2498c100004885db0f84493421ffe9c03221ff498b842498c100004885c00f84333421ffe9ec3321ff4d8bbc24b0c100004d85ff0f84873821ffe9bb3621ff4d8bbc24b0c100004d85ff0f84713821ffe9f33721ff4d8bbc24a8c100004d85ff0f84e53921ffe99a3821ff4d8bac2490c100004d85ed0f84383d21ffe9203b21ff498b9c2490c100004885db0f84223d21ffe9583c21ff498b842490c100004885c00f840c3d21ffe9be3c21ff4d8bac2488c100004d85ed0f84943e21ffe93f3d21ff"/>
         </PatchList>
     </Metadata>
 </Patch>

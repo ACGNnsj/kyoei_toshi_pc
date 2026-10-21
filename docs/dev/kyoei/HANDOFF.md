@@ -198,3 +198,7 @@ from [rdi+0x60][44] was 0x08450390, the low half of a pointer next to rbx (0x100
 list holds other data. Precise readbacks did not prevent it, so this crash is not stale GPU data:
 it is the same class as the other garbage index lists (a game race or a freed and reused list).
 Whether Precise removes the vertex explosions is still open (the run never reached driving).
+
+Next test: patch "Skip Bad Bone Indices" (both loops of 0x498950: index above 0xffff skips the entry;
+stubs 0x124a250-0x124a290) so the Precise run gets through the stage203 load and the owner can see
+whether the vertex explosions remain with Precise readbacks.

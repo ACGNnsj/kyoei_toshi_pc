@@ -75,4 +75,11 @@
             <Line Type="bytes" Address="0x0164a1f0" Value="4a6304a0483dffff00000f87cc5e25ff4c69f848030000e95e5c25ff49630424483dffff00000f87605f25ff4869c048030000e9135f25ff49630424483dffff00000f87b65f25ff4c89f14869c048030000e9575f25ff"/>
         </PatchList>
     </Metadata>
+    <Metadata Title="City Shrouded in Shadow" Name="Skip Bad Bone Indices" Note="The function at 0x498950 walks an index array (this+0x60) into 0x2c8-byte elements (this+0x58) in two loops. Loading the driving stage (stage203) with Precise readbacks, an index read 0x08450390 (the low half of a pointer): fault at 0x498bf6. The index loads at 0x498b46 and 0x498beb jump to stubs at 0x124a250-0x124a290 that skip the entry (each loop's next item, 0x498bbb and 0x498d2a) when the index is above 0xffff." Author="kyoei_toshi_pc" PatchVer="0.1" AppVer="01.00" AppElf="eboot.bin" isEnabled="true">
+        <PatchList>
+            <Line Type="bytes" Address="0x00898b46" Value="e90517db00909090909090"/>
+            <Line Type="bytes" Address="0x00898beb" Value="e97d16db00909090909090"/>
+            <Line Type="bytes" Address="0x0164a250" Value="4a6334a64881feffff00000f875ae924ff4869c6c8020000e9e4e824ff4a6304a0483dffff0000770c4c69f0c8020000e971e924ff488b7d8849ffc4e999ea24ff"/>
+        </PatchList>
+    </Metadata>
 </Patch>

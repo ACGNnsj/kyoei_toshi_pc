@@ -8,6 +8,9 @@ set "VW_DATA_DIR=%~dp0run_kyoei"
 set "VW_UPDATES=0"
 rem Frame rate cap: 15, near the PS4 release (higher rates crash more often, see HANDOFF). 0 = no cap.
 set "VW_FPS_LIMIT=15"
+rem Test: GPU results in small (width 8 or less) or linear render targets written back for the
+rem CPU, as for an autofocus depth probe (the blur in free movement, the menu background).
+set "VW_READBACK_LINEAR=1"
 if not exist "out\vwport.exe" (
     echo out\vwport.exe is missing: build it first ^(bash build.sh in MSYS2 CLANG64^).
     pause

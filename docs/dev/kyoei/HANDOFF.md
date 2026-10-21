@@ -130,3 +130,11 @@ tiled render target on the CPU (thread 0x5d93b0 only swaps R/B and applies gamma
 filled near 0xb4ee30), and the texture cache writes back only linear or narrow images. A fix
 needs tiled write-back (re-tiling a downloaded image into guest memory). Saves themselves load
 correctly. Fallback idea: build the icon from the last presented frame.
+
+## Confirmed 2026-10-22 (owner)
+
+- Hair and eyelashes render correctly with `DB_ALPHA_TO_MASK` honored (`34dba1d`); they were
+  opaque blocks.
+- Save icons: wrong for the first saves of a session, right for later ones (four saves: two of
+  each, none read back by `vwgpu_read_back`). Still deferred.
+- No crash in a long play session at 15 FPS.

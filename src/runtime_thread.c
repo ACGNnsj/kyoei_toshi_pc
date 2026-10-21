@@ -1,7 +1,11 @@
 /* Guest threads on host pthreads. Each guest thread owns a FreeBSD-style TCB
  * (variant II: static TLS below the TCB). The loader rewrites the eboot's
  * `mov rax, fs:[0]` into `mov rax, gs:[0]`, so GS base = guest TCB while glibc
- * keeps FS. Priorities/affinity are recorded, not enforced by a PS4 scheduler.
+ * keeps FS. Priorities and affinity are recorded; VW_PS4_SCHEDULING=1 also applies them, as
+ * the PS4's strict priority scheduler would: each of the 7 game cores is one host CPU and the
+ * PS4 priority (256 highest .. 767 lowest) maps to the host thread priority, so threads a game
+ * pins to one core with different priorities do not interleave (a game may rely on that
+ * instead of locking).
  * Windows: GS is the TEB and cannot be moved. The guest TCB lives in a TLS slot of the TEB
  * instead, and the loader rewrites the load to `mov rax, gs:[0x1480+8*slot]` (TlsSlots),
  * the same 9-byte instruction with another displacement. */
@@ -48,6 +52,7 @@ typedef struct GuestThread {
     char name[32];
     int detached, finished, joined, host_owned;
     int32_t id; /* scePthreadGetthreadid */
+    int sched_prio; /* the creator's priority when the attribute inherits it, else 0 */
 #ifdef _WIN32
     vw_jmp_buf exit_jump; /* no SEH unwinding through guest frames */
 #else
@@ -278,9 +283,63 @@ static GuestDtors thread_dtors;
 static ABI int32_t set_thread_dtors(GuestDtors dtors) { thread_dtors=dtors; return 0; }
 /* The thread-atexit bookkeeping of the same libcs: nothing to account for here. */
 static ABI int32_t thread_atexit_ok(void) { return 0; }
+/* ---- PS4 scheduling (VW_PS4_SCHEDULING=1) ---- */
+static int scheduling_enabled(void) {
+    static int enabled=-1;
+    if (enabled<0) { const char *v=getenv("VW_PS4_SCHEDULING"); enabled=v && *v=='1'; }
+    return enabled;
+}
+/* The priority a thread runs at: its attribute's, or its creator's when inherited. */
+static int effective_prio(const GuestThread *t) { return t->sched_prio ? t->sched_prio : t->attr.prio; }
+static long host_cpus(void) {
+#ifdef _WIN32
+    long cpus=(long)GetActiveProcessorCount(ALL_PROCESSOR_GROUPS);
+#else
+    long cpus=sysconf(_SC_NPROCESSORS_ONLN);
+#endif
+    return cpus>64 ? 64 : cpus;
+}
+/* PS4 core i (bit i, cores 0-6) runs on host CPU i*N/7. */
+static uint64_t host_mask(uint64_t mask) {
+    const long cpus=host_cpus();
+    mask&=0x7f;
+    if (cpus<7 || !mask) return 0;
+    uint64_t host=0;
+    for (int core=0;core<7;++core) if (mask>>core&1) host|=UINT64_C(1)<<(core*cpus/7);
+    return host;
+}
+static void apply_scheduling(GuestThread *t,int self) {
+    if (!scheduling_enabled()) return;
+    const uint64_t mask=host_mask(t->attr.affinity);
+    const int prio=effective_prio(t);
+#ifdef _WIN32
+    HANDLE h=self ? GetCurrentThread() : (HANDLE)pthread_gethandle(t->host);
+    if (!h) return;
+    if (mask && !SetThreadAffinityMask(h,(DWORD_PTR)mask))
+        printf("Runtime: thread '%s': host affinity %#llx not applied\n",t->name,(unsigned long long)mask);
+    const int level=prio<=300 ? THREAD_PRIORITY_HIGHEST : prio<=500 ? THREAD_PRIORITY_ABOVE_NORMAL :
+                    prio<=700 ? THREAD_PRIORITY_NORMAL : prio<=740 ? THREAD_PRIORITY_BELOW_NORMAL :
+                    THREAD_PRIORITY_LOWEST;
+    if (!SetThreadPriority(h,level)) printf("Runtime: thread '%s': host priority not applied\n",t->name);
+#else
+    if (mask) {
+        cpu_set_t set; CPU_ZERO(&set);
+        for (int cpu=0;cpu<64;++cpu) if (mask>>cpu&1) CPU_SET(cpu,&set);
+        pthread_setaffinity_np(self ? pthread_self() : t->host,sizeof(set),&set);
+    }
+    (void)prio; /* Linux: real-time priorities need privileges; affinity only */
+#endif
+}
+static int sched_logs;
+static void log_scheduling(const GuestThread *t,const char *what) {
+    if (__atomic_fetch_add(&sched_logs,1,__ATOMIC_RELAXED)>=200) return;
+    printf("Runtime: thread '%s' (id %d) %s: prio %d%s, policy %d, affinity %#llx\n",t->name,t->id,what,
+           effective_prio(t),t->sched_prio ? " (inherited)" : "",t->attr.policy,(unsigned long long)t->attr.affinity);
+}
 static void *host_start(void *p) {
     GuestThread *t=p;
     attach(t);
+    apply_scheduling(t,1);
     set_host_name(t->name);
     if (!exit_setjmp(t)) t->result=t->entry(t->argument);
     if (thread_dtors) thread_dtors();
@@ -296,6 +355,8 @@ static int32_t create(GuestThread **out,ThreadAttr **attr_slot,GuestEntry entry,
     if (!t) return ERR(12);
     if (a) { t->attr=*a; t->attr.next=NULL; }
     t->entry=entry; t->argument=argument; t->detached=t->attr.detached;
+    /* PTHREAD_INHERIT_SCHED (4): the new thread runs at its creator's priority. */
+    if (t->attr.inherit==4 && current) t->sched_prio=effective_prio(current);
     snprintf(t->name,sizeof(t->name),"%s",name ? name : "guest");
     pthread_attr_t host;
     pthread_attr_init(&host);
@@ -320,6 +381,7 @@ static int32_t create(GuestThread **out,ThreadAttr **attr_slot,GuestEntry entry,
     if (t->detached) pthread_detach(t->host);
     pthread_mutex_lock(&lock); ++created; pthread_mutex_unlock(&lock);
     printf("Runtime: guest thread '%s' created (stack=%llu, prio=%d)\n",t->name,(unsigned long long)stack,t->attr.prio);
+    log_scheduling(t,"scheduling");
     return 0;
 }
 static ABI int32_t thread_create(GuestThread **out,ThreadAttr **attr,GuestEntry entry,void *argument,const char *name) {
@@ -359,11 +421,17 @@ static ABI int32_t thread_get_prio(GuestThread *t,int *prio) {
 }
 static ABI int32_t thread_set_prio(GuestThread *t,int prio) {
     if (!find_thread(t)) return ERR(3);
-    t->attr.prio=prio; return 0;
+    t->attr.prio=prio; t->sched_prio=0;
+    log_scheduling(t,"priority set");
+    apply_scheduling(t,t==current);
+    return 0;
 }
 static ABI int32_t thread_set_affinity(GuestThread *t,uint64_t mask) {
     if (!find_thread(t)) return ERR(3);
-    t->attr.affinity=mask; return 0;
+    t->attr.affinity=mask;
+    log_scheduling(t,"affinity set");
+    apply_scheduling(t,t==current);
+    return 0;
 }
 static ABI int32_t thread_get_affinity(GuestThread *t,uint64_t *mask) {
     if (!find_thread(t)) return ERR(3);

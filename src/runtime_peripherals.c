@@ -4,6 +4,7 @@
  * values and error codes follow shadPS4's libraries (hmd, vr_tracker, camera, move, ...).
  * PngEnc writes real PNG files with stored (uncompressed) deflate blocks. */
 #include "runtime_offline.h"
+#include "gpu/vwgpu.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -191,6 +192,9 @@ static ABI int32_t png_encode(void *handle, const PngEncodeParam *p, PngOutputIn
     if ((p->color_space != 3 && !alpha) || p->pixel_format > 1 || p->bit_depth != 8 || !p->width || !p->height ||
         p->pitch / 4 < p->width || (uint64_t)p->pitch * (p->height - 1) + (uint64_t)p->width * 4 > p->image_size)
         return PNG_INVALID_PARAM;
+    /* The picture is usually a GPU-made capture: its bytes reach memory only when read back. */
+    const int read_back = vwgpu_read_back((uint64_t)(uintptr_t)p->image,
+                                          (uint64_t)p->pitch * (p->height - 1) + (uint64_t)p->width * 4);
     const unsigned channels = alpha ? 4 : 3;
     const uint64_t row = 1 + (uint64_t)p->width * channels, raw = row * p->height;
     PngWriter w = {p->png, p->png_size, 0, 0};
@@ -236,10 +240,9 @@ static ABI int32_t png_encode(void *handle, const PngEncodeParam *p, PngOutputIn
     start = w.at;
     put(&w, "\0\0\0\0IEND", 8);
     chunk_end(&w, start);
-    /* Where the picture came from: a game encodes a GPU-rendered capture (save icons), which the
-     * texture cache writes back only for linear or narrow images. */
-    printf("Runtime: PngEnc %ux%u pitch %u from %p (format %u, %s): %zu bytes%s\n", p->width, p->height, p->pitch,
-           (const void *)p->image, p->pixel_format, alpha ? "RGBA" : "RGB", w.at, w.overflow ? ", overflow" : "");
+    printf("Runtime: PngEnc %ux%u pitch %u from %p (format %u, %s%s): %zu bytes%s\n", p->width, p->height, p->pitch,
+           (const void *)p->image, p->pixel_format, alpha ? "RGBA" : "RGB", read_back ? ", GPU data read back" : "",
+           w.at, w.overflow ? ", overflow" : "");
     if (w.overflow) return PNG_DATA_OVERFLOW;
     if (info) { info->data_size = (uint32_t)w.at; info->processed_height = p->height; }
     return (int32_t)w.at;

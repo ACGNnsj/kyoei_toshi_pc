@@ -359,6 +359,16 @@ extern "C" int vwgpu_overlay_captures_input(void) {
     return VwOverlay::CapturesInput() ? 1 : 0;
 }
 
+// A save icon encoded from a GPU-made capture (City Shrouded in Shadow) read stale bytes.
+extern "C" int vwgpu_read_back(uint64_t address, uint64_t size) {
+    auto* rasterizer = Core::Memory::Instance()->GetRasterizer();
+    if (!rasterizer || !size) return 0;
+    auto& buffers = rasterizer->GetBufferCache();
+    if (!buffers.IsRegionGpuModified(address, size)) return 0;
+    buffers.ReadMemory(address, size);
+    return 1;
+}
+
 extern "C" int vwgpu_text_input_begin(const char* initial, const char* prompt) {
     if (!g_window) return 0;
     g_window->BeginTextInput(initial ? initial : "", prompt ? prompt : "Text");

@@ -24,6 +24,9 @@ uintptr_t vwgpu_resolve(const char *scoped_nid);
 int vwgpu_handle_fault(void *ucontext, void *address);
 /* VW_WRITE_LOG=1: prints the logged GPU-side writes to guest memory near the fault. */
 void vwgpu_dump_guest_writes(void *ucontext);
+/* Writes what the GPU wrote to [address, address+size) back to guest memory before a host
+ * function reads it (buffer readbacks are Relaxed: CPU reads are not trapped). */
+int vwgpu_read_back(uint64_t address, uint64_t size); /* 1: GPU data was copied back */
 /* Keyboard text entry through the game window (IME dialog). begin returns 0 when
  * no window exists; poll returns 0 typing, 1 confirmed, 2 cancelled (UTF-8 text). */
 int vwgpu_text_input_begin(const char *initial_utf8, const char *prompt_utf8);

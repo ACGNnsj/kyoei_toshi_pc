@@ -1019,13 +1019,34 @@ ImageId TextureCache::FindImageFromRange(VAddr address, size_t size, bool ensure
     return {};
 }
 
+bool TextureCache::WantsReadback(const Image& image) {
+    const auto& info = image.info;
+    const bool wanted = readback_linear_mode == 2
+                            ? info.size.width <= 8 && info.size.height <= 8
+                            : readback_linear_mode == 1 && (!info.props.is_tiled || info.size.width <= 8);
+    if (wanted) {
+        // Each image written back is named once (which memory the GPU's copies land on).
+        static std::mutex seen_mutex;
+        static std::vector<std::tuple<VAddr, u32, u32>> seen;
+        std::scoped_lock lk{seen_mutex};
+        const auto key = std::make_tuple(info.guest_address, info.size.width, info.size.height);
+        if (std::find(seen.begin(), seen.end(), key) == seen.end() && seen.size() < 256) {
+            seen.push_back(key);
+            std::printf("GPU: image %#llx (%ux%u, %s, %u bits, %llu bytes) is written back for the CPU\n",
+                        static_cast<unsigned long long>(info.guest_address), info.size.width,
+                        info.size.height, info.props.is_tiled ? "tiled" : "linear", info.num_bits,
+                        static_cast<unsigned long long>(info.guest_size));
+        }
+    }
+    return wanted;
+}
+
 ImageView& TextureCache::FindTexture(ImageId image_id, const ImageDesc& desc, ViewMemo* memo,
                                      bool refresh) {
     Image& image = slot_images[image_id];
     if (desc.type == BindingType::Storage) {
         image.flags |= ImageFlagBits::GpuModified;
-        if (readback_linear_images && (!image.info.props.is_tiled || image.info.size.width <= 8) &&
-            image.info.guest_address != 0) {
+        if (WantsReadback(image) && image.info.guest_address != 0) {
             std::unique_lock lk{download_images_mutex};
             download_images.emplace(image_id);
         }
@@ -1055,7 +1076,7 @@ ImageView& TextureCache::FindTexture(ImageId image_id, const ImageDesc& desc, Vi
 ImageView& TextureCache::FindRenderTarget(ImageId image_id, const ImageDesc& desc) {
     Image& image = slot_images[image_id];
     image.flags |= ImageFlagBits::GpuModified;
-    if (readback_linear_images && (!image.info.props.is_tiled || image.info.size.width <= 8)) {
+    if (WantsReadback(image)) {
         std::unique_lock lk{download_images_mutex};
         download_images.emplace(image_id);
     }

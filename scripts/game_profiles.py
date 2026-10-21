@@ -22,9 +22,11 @@ PROFILES = {
         # The game reads GPU results back on the CPU: a previous frame's copy (the port's
         # default for Unicorn Overlord) left NULL entries in an NPC list during the prologue
         # cutscenes (faults at 0x23c53b), a menu background black and a blur on screen.
-        # Small and linear render targets written back for the CPU: the free-movement depth of
-        # field focuses from one (everything stayed blurred), and the menu background (black).
-        'forced': {'VW_DEFERRED_READBACK': '0', 'VW_STALE_READBACK': '0', 'VW_READBACK_LINEAR': '1'},
+        # Render targets written back for the CPU: the free-movement depth of field focuses
+        # from one (everything stayed blurred), and the menu background (black). Testing 2 (only
+        # images of 8x8 or less): with 1 a large linear image written back late may be what
+        # overwrote game data with 1.0f (index read as 0x3f800000 at 0x49fdd4).
+        'forced': {'VW_DEFERRED_READBACK': '0', 'VW_STALE_READBACK': '0', 'VW_READBACK_LINEAR': '2'},
     },
 }
 

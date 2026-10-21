@@ -442,6 +442,14 @@ private:
     Common::LeastRecentlyUsedCache<ImageId, u64> lru_cache;
     Common::LeastRecentlyUsedCache<u64, u64> sampler_lru_cache;
     const bool readback_linear_images;
+    /// vw: VW_READBACK_LINEAR=1 writes back linear or narrow (width <= 8) images, =2 only tiny
+    /// ones (width and height <= 8, as an autofocus probe): a large linear image written back
+    /// later may land on memory the game already uses for something else.
+    const int readback_linear_mode = [] {
+        const char* v = std::getenv("VW_READBACK_LINEAR");
+        return v && v[0] == '2' ? 2 : v && (v[0] == '1' || v[0] == 'y' || v[0] == 't') ? 1 : 0;
+    }();
+    bool WantsReadback(const Image& image);
     const bool deferred_readbacks = [] {
         const char* value = std::getenv("VW_DEFERRED_READBACK");
         return value && value[0] == '1';

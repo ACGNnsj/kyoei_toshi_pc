@@ -22,8 +22,8 @@ rem runs (re-read every 0.25 s). Every start begins with all of them on.
 set "VW_TOGGLE_FILE=%~dp0run_kyoei\toggles.txt"
 >"%VW_TOGGLE_FILE%" echo 0
 rem Test: Precise buffer readbacks (the CPU sees GPU-written buffers as they are now). The boot
-rem hang at about 3 s was a copy thread deadlocked with the GPU thread (fixed). If the game
-rem stops, every guest thread's location is printed every 5 s.
+rem hang at about 3 s was a copy thread deadlocked with the GPU thread (fix untested). If the
+rem game stops, every guest thread's location is printed every 5 s.
 set "VW_READBACKS=2"
 set "VW_HANG_DUMP=5"
 rem Each GPU-written range copied back over game memory, and whether it replaced newer data.

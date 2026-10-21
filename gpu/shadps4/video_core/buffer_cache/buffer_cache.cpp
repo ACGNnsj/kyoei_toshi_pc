@@ -641,7 +641,9 @@ const Buffer* BufferCache::UploadCopies(const Buffer* arena, std::span<vk::Buffe
         memory->CopySparseMemory(copies[i].dstOffset, staging.mapped + copies[i].srcOffset,
                                  copies[i].size);
     };
-    if (total_size_bytes >= 2_MB && copies.size() > 1) {
+    // vw: serial with Precise readbacks (see CopySparseMemorySlow).
+    if (total_size_bytes >= 2_MB && copies.size() > 1 &&
+        EmulatorSettings.GetReadbacksMode() != GpuReadbacksMode::Precise) {
         VwCopy::ParallelFor(copies.size(), copy);
     } else {
         for (std::size_t i = 0; i < copies.size(); ++i) {

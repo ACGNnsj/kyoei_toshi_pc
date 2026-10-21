@@ -206,8 +206,11 @@ static LONG CALLBACK vectored_fault(EXCEPTION_POINTERS *info) {
     const EXCEPTION_RECORD *record=info->ExceptionRecord;
     DWORD code=record->ExceptionCode;
     if (code==EXCEPTION_ACCESS_VIOLATION && record->NumberParameters>=2) {
-        /* GPU page tracking (write-protected guest pages) is resolved first. */
-        if (gpu_enabled && vwgpu_handle_fault(info,(void *)record->ExceptionInformation[1])) return EXCEPTION_CONTINUE_EXECUTION;
+        /* GPU page tracking (write-protected guest pages) is resolved first. Not a speculative
+         * reader's read fault (a page Precise readbacks protect against reads): resolving it
+         * waits for the GPU thread, which may wait for this reader; the reader gives up. */
+        int speculative_read=runtime_fault_recover && record->ExceptionInformation[0]==0;
+        if (gpu_enabled && !speculative_read && vwgpu_handle_fault(info,(void *)record->ExceptionInformation[1])) return EXCEPTION_CONTINUE_EXECUTION;
         if (runtime_fault_recover) {
             /* A speculative guest memory read (GPU draw preparation) faulted: the thread resumes
              * in vw_longjmp, outside the exception dispatcher, back at its recovery point. */

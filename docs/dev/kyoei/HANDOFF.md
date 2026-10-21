@@ -186,5 +186,7 @@ it. The host thread dump (symbolized with `llvm-symbolizer --obj=out/vwport.exe`
 signal waiting for a copy-thread job, and `vw:Copy0` inside the fault handler, in
 `BufferCache::ReadMemory` -> `SendCommand` to the GPU thread. Precise mode read-protects a range as
 soon as a binding marks it GPU-modified, which can happen before a copy queued for it runs: the copy
-thread faults on its own source. Fix: queued copies (`CopyQueuedGuest`, buffer_cache.cpp) read
-through the backing view in Precise mode. `kyoei_precise_test.bat` is the test.
+thread faults on its own source. Fix (untested): queued copies (`CopyQueuedGuest`, buffer_cache.cpp) read
+through the backing view in Precise mode; large copies no longer split across the copy threads
+(the caller handles its faults inline); a speculative reader (draw preparation) gives up on a read
+fault instead of waiting for the GPU thread (probe.c). `kyoei_precise_test.bat` is the test.

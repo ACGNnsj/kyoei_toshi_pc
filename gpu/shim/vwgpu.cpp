@@ -25,6 +25,7 @@
 #include "common/elf_info.h"
 #include "common/logging/log.h"
 #include "common/rdtsc.h"
+#include "core/emulator_settings.h"
 #include "core/libraries/kernel/orbis_error.h"
 #include "core/libraries/libs.h"
 #include "core/memory.h"
@@ -137,9 +138,12 @@ void CopySparseSerial(VAddr source, u8* dest, u64 size) {
     }
 }
 void MemoryManager::CopySparseMemorySlow(VAddr source, u8* dest, u64 size) {
-    // vw: large uploads (streaming) are split across the copy threads.
+    // vw: large uploads (streaming) are split across the copy threads. Not with Precise
+    // readbacks: a copy thread's read fault waits for the GPU thread, which may be the caller
+    // waiting here; on the caller the fault is handled inline.
     constexpr u64 Chunk = 512 * 1024;
-    if (size < 4 * Chunk || !VwCopy::Enabled()) {
+    if (size < 4 * Chunk || !VwCopy::Enabled() ||
+        EmulatorSettings.GetReadbacksMode() == GpuReadbacksMode::Precise) {
         return CopySparseSerial(source, dest, size);
     }
     VwCopy::ParallelFor((size + Chunk - 1) / Chunk, [&](std::size_t i) {

@@ -138,3 +138,15 @@ correctly. Fallback idea: build the icon from the last presented frame.
 - Save icons: wrong for the first saves of a session, right for later ones (four saves: two of
   each, none read back by `vwgpu_read_back`). Still deferred.
 - No crash in a long play session at 15 FPS.
+
+## Game patches (patches/Kyoei_Toshi.xml), 2026-10-22
+
+| Patch | Fault it removes |
+|---|---|
+| No GPU Stall Timeout | the game's own int 0x41 after 10M spins on a GPU label (item handed over) |
+| Skip Constants For Unbound Shader | NULL shader in the seven per-stage data writers 0x45eaa0-0x45f3c0 (QTE, Continue) |
+| Skip Unloaded NPC List Entries | NULL entry in the NPC list walk at 0x23c53b (stage load at 30 FPS) |
+
+The readback change made 0x23c53b rarer but did not remove it: these are the game's races,
+exposed by the PC's speed. The third patch uses 0x433131-0x4331bb as a code cave: the stall
+path the first patch makes dead (its jmp is repeated in the third so it stands alone).

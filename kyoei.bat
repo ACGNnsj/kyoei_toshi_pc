@@ -15,9 +15,9 @@ set "VW_PS4_SCHEDULING=1"
 rem Diagnostics: F11 writes this frame's passes, draws and shaders to run_kyoei\user\captures.
 set "VW_FRAME_CAPTURE_KEY=1"
 set "VW_CAPTURE_DETAIL=1"
-rem The game draws to the display buffer more than once a frame: record across six of those
-rem passes, or a capture holds only the last two (present, clear) and misses the scene.
-set "VW_CAPTURE_FRAMES=6"
+rem The game draws to the display buffer more than once a frame, and the vertex explosions last
+rem a moment: one F11 records the next 120 display passes (about 2 s at 30 FPS).
+set "VW_CAPTURE_FRAMES=120"
 if not exist "out\vwport.exe" (
     echo out\vwport.exe is missing: build it first ^(bash build.sh in MSYS2 CLANG64^).
     pause

@@ -12,6 +12,9 @@ set "VW_FPS_LIMIT=30"
 rem Test: GPU results in small (width 8 or less) or linear render targets written back for the
 rem CPU, as for an autofocus depth probe (the blur in free movement, the menu background).
 set "VW_READBACK_LINEAR=1"
+rem Test: one GPU stage (draws recorded where the commands are read), so a frame's guest data
+rem is consumed before the game sees it done (fast-forward crash, white wedges).
+set "VW_DRAW_PIPE=0"
 rem Diagnostics: F11 writes this frame's passes, draws and shaders to run_kyoei\user\captures.
 set "VW_FRAME_CAPTURE_KEY=1"
 set "VW_CAPTURE_DETAIL=1"

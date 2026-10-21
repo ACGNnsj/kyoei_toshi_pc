@@ -25,6 +25,8 @@ rem Test (boot only): Precise buffer readbacks, which hung the boot at about 3 s
 rem thread's location is printed every 5 s; close the window after about 30 s.
 set "VW_READBACKS=2"
 set "VW_HANG_DUMP=5"
+rem Each GPU-written range copied back over game memory, and whether it replaced newer data.
+set "VW_LOG_DOWNLOADS=1"
 if not exist "out\vwport.exe" (
     echo out\vwport.exe is missing: build it first ^(bash build.sh in MSYS2 CLANG64^).
     pause

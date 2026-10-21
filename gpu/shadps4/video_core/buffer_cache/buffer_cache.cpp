@@ -10,6 +10,8 @@
 #include <cstdlib>
 #include <magic_enum/magic_enum.hpp>
 #include "vw_copy.h"
+
+extern "C" int runtime_memory_read_backing(uintptr_t address, void* data, uint64_t size);
 #include "vw_toggles.h"
 #include "common/alignment.h"
 #include "core/memory.h"
@@ -204,10 +206,31 @@ void BufferCache::DownloadMemory(const Buffer* arena, VAddr device_addr, u64 siz
     scheduler.Finish();
 
     download.buffer->Invalidate(download.offset, download.size);
+    // vw: VW_LOG_DOWNLOADS=1 — each GPU-written range copied back over guest memory and how many
+    // of its bytes differ from what the guest has there now: a download that replaces newer CPU
+    // data loses the CPU's write. The first 400 only.
+    static const bool log_downloads = [] {
+        const char* v = std::getenv("VW_LOG_DOWNLOADS");
+        return v && v[0] == '1';
+    }();
+    static std::atomic<int> logged{0};
     for (const auto& copy : copies) {
         auto* dst_addr = std::bit_cast<u8*>(arena_base + copy.srcOffset);
-        memory->TryWriteBacking(dst_addr, download.mapped + (copy.dstOffset - download.offset),
-                                copy.size);
+        const u8* src = download.mapped + (copy.dstOffset - download.offset);
+        if (log_downloads && logged.fetch_add(1, std::memory_order_relaxed) < 400) {
+            std::vector<u8> now(copy.size);
+            u64 differ = 0;
+            if (runtime_memory_read_backing(reinterpret_cast<uintptr_t>(dst_addr), now.data(), copy.size)) {
+                for (u64 i = 0; i < copy.size; ++i) {
+                    differ += now[i] != src[i];
+                }
+            }
+            std::printf("Download: %#llx +%llu, %llu bytes differ from guest memory\n",
+                        static_cast<unsigned long long>(arena_base + copy.srcOffset),
+                        static_cast<unsigned long long>(copy.size),
+                        static_cast<unsigned long long>(differ));
+        }
+        memory->TryWriteBacking(dst_addr, src, copy.size);
     }
     memory_tracker->UnmarkRegionAsGpuModified(device_addr, size);
 }

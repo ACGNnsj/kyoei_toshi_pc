@@ -216,3 +216,12 @@ After 800 s: a corrupt command buffer (`Unknown PM4 type 3 opcode 0xd`, the word
 1.0f, 10.0f, 128.0f). Not a race then: data wrong from the start, or overwritten the same way each
 time. Next test: `kyoei_readlog_test.bat` (30 FPS, `VW_READ_LOG=1` + `VW_WRITE_LOG=1`): a fault or a bad
 packet lists the file reads (runtime_file.c) and GPU writes near the damaged data.
+
+Read-log run (log run-20261022-063237, 30 FPS, driving): corrupt command buffer again; no file read
+and no GPU write near it. **Every first bad packet in every log follows `c0016900 000002aa 000000ff`**
+(SET_CONTEXT_REG IA_MULTI_VGT_PARAM = 0xff, written by sceGnmSetVgtControl, which is correct: 3 dwords).
+Its only caller is the game's wrapper 0x4265a0 (writes at cb+0x10, `addq $0xc`), called from 0x237f16,
+0x434cdf and 0x434ff1 (draw path, cb = ctx+0x80). The words after it are an older packet's tail or stale
+data: the cmd pointer used was stale (another writer advanced cb+0x10). None of the stubbed Gnm
+functions is called directly by the game. Next: read 0x434c00-0x435100 and 0x237f16 for a cached cmd
+pointer or a second thread on the same cb (ctx+0x80).

@@ -144,6 +144,14 @@ void runtime_thread_attach_main(void) {
     GuestThread *t=runtime_thread_current();
     snprintf(t->name,sizeof(t->name),"main");
 }
+/* Id and name of the calling guest thread (diagnostics in the GPU library); -1 and "" for a
+ * thread without a record, which is not given one here. */
+int runtime_thread_current_info(char *name, size_t size) {
+    if (size) name[0]=0;
+    if (!current) return -1;
+    if (size) snprintf(name,size,"%s",current->name);
+    return current->id;
+}
 static GuestThread *find_thread(void *handle) {
     GuestThread *found=NULL;
     pthread_mutex_lock(&lock);

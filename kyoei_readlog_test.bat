@@ -30,6 +30,9 @@ set "VW_WRITE_LOG=1"
 rem A copy of each submitted command buffer: a corrupt one is compared with what the game
 rem submitted (did the game write it again before the GPU thread read it?).
 set "VW_DCB_CHECK=1"
+rem Which game thread writes each block of command buffer memory: two threads writing the
+rem same block at once are printed with where in the game they write from.
+set "VW_CB_THREADS=1"
 if not exist "out\vwport.exe" (
     echo out\vwport.exe is missing: build it first ^(bash build.sh in MSYS2 CLANG64^).
     pause

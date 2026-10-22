@@ -242,3 +242,13 @@ earlier) 23027 words had changed. That compare was against the wrong submission 
 the newest), so the check now marks the submission the GPU thread began (StartDcb), prints every logged
 submission of the buffer and the backlog. Open: why the rendering got better with the check on (its
 only side effect is a copy of each buffer at submission, i.e. a delay on the submitting thread).
+
+Second `VW_DCB_CHECK` run (log run-20261022-081030): fog and lightning drawn, vertex explosions back
+(so the earlier clean run was luck, not the check). The corrupt buffer was **exactly as submitted**
+(0 words changed; 7 submissions queued behind it): the game itself submitted it, so it is not a reuse
+race with the GPU thread. Layout: `c0012d00 1770 2` (DrawIndexAuto) + 4-word trailing NOP (correct, our
+sceGnmDrawIndexAuto), then `c0016900 2aa ff` (SetVgtControl), then `68752000` + floats: an
+allocateFromCommandBuffer block whose NOP header is missing (overwritten by the 0xff). The writes
+overlap: two writers with different command pointers on one buffer. Next test: `VW_CB_THREADS=1`
+(instrumented the 44 sceGnm functions that take cmdbuf) prints two guest threads writing the same
+64 KiB block within 1 ms, with their call sites.

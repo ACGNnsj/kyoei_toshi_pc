@@ -345,3 +345,11 @@ matrix. The capture text cannot show it: it prints every dword as a float, so pa
 garbage. The game ships its own libc (math included), so the CPU animation runs the PS4 code. Next
 test: the live GPU toggles (toggles\A_uploads_off.bat, B_caches_off.bat) while the triangles are on
 screen. If one makes them vanish, our CPU-to-GPU uploads or draw caches serve stale bone data.
+
+Owner's video (2026-10-22 11:37, the driving cutscene, cond fix in): the triangles flash for one or two
+frames at a time, a different colour each time (green, cream, red, peach, a bright white streak from a
+tail light), often fanning from the cars' lights. Per-frame and random, so not static model data:
+something reads a frame's vertex or constant data before it is ready or after it was reused. The live
+toggles (A uploads off, B caches off, both off) did not stop it; B off made it flash more often.
+Next: kyoei_serial_test.bat turns every GPU-side thread of the port off (prep workers, draw pipe,
+Vulkan recorder, copy threads, present thread).

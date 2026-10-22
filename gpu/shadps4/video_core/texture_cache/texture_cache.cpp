@@ -1021,9 +1021,13 @@ ImageId TextureCache::FindImageFromRange(VAddr address, size_t size, bool ensure
 
 bool TextureCache::WantsReadback(const Image& image) {
     const auto& info = image.info;
-    const bool wanted = readback_linear_mode == 2
-                            ? info.size.width <= 8 && info.size.height <= 8
-                            : readback_linear_mode == 1 && (!info.props.is_tiled || info.size.width <= 8);
+    const bool tiny = info.size.width <= 8 && info.size.height <= 8;
+    const bool wanted =
+        readback_linear_mode == 2   ? tiny
+        : readback_linear_mode == 3 ? tiny || (!info.props.is_tiled && info.size.width <= 256 &&
+                                               info.size.height <= 256)
+                                    : readback_linear_mode == 1 &&
+                                          (!info.props.is_tiled || info.size.width <= 8);
     if (wanted) {
         // Each image written back is named once (which memory the GPU's copies land on).
         static std::mutex seen_mutex;

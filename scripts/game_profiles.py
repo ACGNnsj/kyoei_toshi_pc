@@ -25,8 +25,10 @@ PROFILES = {
         # Render targets written back for the CPU: the free-movement depth of field focuses
         # from one (everything stayed blurred), and the menu background (black). 2: only images
         # of 8x8 or less (both still right, owner 2026-10-22); 1 also wrote back every linear
-        # image, which could land late on memory the game had reused.
-        'forced': {'VW_DEFERRED_READBACK': '0', 'VW_STALE_READBACK': '0', 'VW_READBACK_LINEAR': '2'},
+        # image, which could land late on memory the game had reused. The save icons were right
+        # only with 1 (the game reads a small linear target on the CPU); 3 adds linear images
+        # up to 256x256 to 2. (The "reused memory" was the guest cond race, fixed since.)
+        'forced': {'VW_DEFERRED_READBACK': '0', 'VW_STALE_READBACK': '0', 'VW_READBACK_LINEAR': '3'},
     },
 }
 

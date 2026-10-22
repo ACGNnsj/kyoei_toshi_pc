@@ -444,10 +444,14 @@ private:
     const bool readback_linear_images;
     /// vw: VW_READBACK_LINEAR=1 writes back linear or narrow (width <= 8) images, =2 only tiny
     /// ones (width and height <= 8, as an autofocus probe): a large linear image written back
-    /// later may land on memory the game already uses for something else.
+    /// later may land on memory the game already uses for something else. =3: the tiny ones
+    /// and linear images up to 256x256 (a save icon drawn to a small linear target).
     const int readback_linear_mode = [] {
         const char* v = std::getenv("VW_READBACK_LINEAR");
-        return v && v[0] == '2' ? 2 : v && (v[0] == '1' || v[0] == 'y' || v[0] == 't') ? 1 : 0;
+        if (v && (v[0] == '2' || v[0] == '3')) {
+            return v[0] - '0';
+        }
+        return v && (v[0] == '1' || v[0] == 'y' || v[0] == 't') ? 1 : 0;
     }();
     bool WantsReadback(const Image& image);
     const bool deferred_readbacks = [] {

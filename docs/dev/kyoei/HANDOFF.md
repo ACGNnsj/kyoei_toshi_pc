@@ -397,3 +397,12 @@ fingerprints stay (they guard the cross-session rewrite, a real if rarer hole).
 reported 0 lookup mismatches. The flashing "vertex explosions" were the lost fetch shader. The
 Unicorn Overlord port shares this code and has the same bug for any pipeline with a geometry stage
 (not pushed anywhere).
+
+## Save icons, 2026-10-22 afternoon
+
+The icons saved 02:14-02:58 (SAVEDATA-002..004) are right (scene plus character); 00:59 and from 07:54
+on are garbage. The right ones were saved with PngEnc's read-back (8721da4, 01:18) and kyoei.bat's
+VW_READBACK_LINEAR=1 (00:49 to 04:27): the game reads a small linear render target on the CPU. Mode 1
+was dropped for 2 (tiny images only) because of game data overwritten with 1.0f, which was the guest
+cond race. New mode 3 (the profile's now): tiny images and linear images up to 256x256. The log names
+each image written back ("GPU: image ... is written back for the CPU"). kyoei_60fps_test.bat: 60 FPS.

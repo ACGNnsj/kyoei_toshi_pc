@@ -288,3 +288,11 @@ likely the explosions) come from that. The draw function at 0x434a10 takes its c
 ctx+0x80) as an argument. The overlap report now prints both threads' guest stacks (frame-pointer chain)
 to find where they get the same context. Also: the run without explosions had a very slow pipeline
 warm-up (64 of 1613 in 10 s; normally all in ~4 s), i.e. different thread timing.
+
+Run run-20261022-085328 (to the motorbike part, 1027 s): two more overlaps. At 1025.313 s thread 6 wrote
+SetVgtControl at 0x105ab37bd4 and 0.001 ms later thread 7 wrote SetVsShader at **the same address**: both
+threads used one command buffer with the same write pointer; 60 ms later a bad packet in that buffer.
+Thread 7 calls come from 0x4260fe (SetVsShader), 0x425b48 (DrawIndex), 0x425fd5 (SetPsShader350); thread
+6 from 0x4265eb (SetVgtControl). The frame-pointer stacks printed nothing useful (the chain does not
+reach the guest frames from the sceGnm functions); probe.c runtime_stack_scan now scans the stack for
+return addresses into the game instead.

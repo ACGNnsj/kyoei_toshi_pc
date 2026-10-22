@@ -117,6 +117,36 @@ static void describe_address(char *out, size_t size, uintptr_t address) {
     snprintf(out,size,"%p",(void *)address);
 }
 void runtime_describe_address(char *out, size_t size, uintptr_t address) { describe_address(out,size,address); }
+/* Guest return addresses on the stack above `from`: values into the guest image that a call
+ * instruction precedes (e8 rel32, or ff /2 of 2, 3, 4 or 6 bytes). A trace without frame pointers;
+ * it may include stale return addresses left on the stack. Reads cannot fault. */
+static int is_call_return(uintptr_t v) {
+    unsigned char b[7]; SIZE_T got=0;
+    if (!ReadProcessMemory(GetCurrentProcess(),(void *)(v-7),b,7,&got) || got!=7) return 0;
+    if (b[2]==0xe8) return 1;
+    for (int len=2;len<=6;++len) {
+        const unsigned char op=b[7-len], modrm=b[8-len];
+        if (len!=5 && op==0xff && (modrm&0x38)==0x10) return 1;
+    }
+    return 0;
+}
+int runtime_stack_scan(uintptr_t from, uintptr_t *out, int max) {
+    int n=0;
+    if (!image) return 0;
+    /* Page by page: the read stops at the top of the stack. Not on the stack itself: guest
+     * threads may have 64 KiB stacks. */
+    static __thread uintptr_t words[512];
+    for (uintptr_t page=from&~(uintptr_t)4095; page<from+0x4000 && n<max; page+=4096) {
+        SIZE_T got=0;
+        if (!ReadProcessMemory(GetCurrentProcess(),(void *)page,words,4096,&got) || got!=4096) break;
+        for (int i=0;i<512 && n<max;++i) {
+            const uintptr_t v=words[i];
+            if (page+i*8u<from || v-(uintptr_t)image>=0x20000000 || v<(uintptr_t)image+7) continue;
+            if (is_call_return(v)) out[n++]=v;
+        }
+    }
+    return n;
+}
 /* Every thread of the process, the port's own (GPU command, draw recording, compilers) too: the
  * guest thread dump shows only guest threads. Each thread is suspended only while its frames are
  * collected as raw addresses (it may hold the heap or loader lock); names come after resuming. */

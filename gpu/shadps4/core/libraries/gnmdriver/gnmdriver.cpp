@@ -121,23 +121,13 @@ std::mutex cb_writers_mutex;
 std::array<CbBlock, 1024> cb_blocks;
 int cb_reports = 0;
 
-/// Guest return addresses along the frame-pointer chain from the sceGnm function's frame (its
-/// saved rbp is the guest caller's); guest stacks are small, so the chain is checked to rise.
+/// Guest return addresses on the stack above the sceGnm function's frame (probe.c: values into
+/// the game's code that a call precedes). The frame-pointer chain does not reach the guest
+/// frames from here.
+extern "C" int runtime_stack_scan(uintptr_t from, uintptr_t* out, int max);
 std::array<uintptr_t, 10> GuestStack(const void* frame) {
     std::array<uintptr_t, 10> out{};
-    const auto here = reinterpret_cast<uintptr_t>(frame);
-    auto rbp = frame ? *static_cast<const uintptr_t*>(frame) : 0;
-    if (rbp <= here || rbp - here > 0x100000) {
-        return out;
-    }
-    for (size_t i = 0; i < out.size() && rbp; ++i) {
-        const auto* f = reinterpret_cast<const uintptr_t*>(rbp);
-        out[i] = f[1];
-        if (f[0] <= rbp || f[0] - rbp > 0x100000) {
-            break;
-        }
-        rbp = f[0];
-    }
+    runtime_stack_scan(reinterpret_cast<uintptr_t>(frame), out.data(), int(out.size()));
     return out;
 }
 

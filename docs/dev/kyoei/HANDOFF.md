@@ -336,3 +336,12 @@ signals that arrived as a wait timed out and 0 host wakeups without a signal: wi
 signal stays pending and the next wait returns at once, an extra job token. The command buffer race
 and the crashes it caused are fixed. The vertex explosions remain (from the start of the driving
 chapter): a separate cause, which also showed at 15 FPS and after a reload.
+
+The "vertex explosions" (owner's screenshots, 03:46, before the bone and NULL element patches went in):
+huge flat triangles in the colour of one animated object, fully fogged, fanning out to one far point:
+from a car, and from the windsock (stage203/model/rainbowbridge/fukinagashi_model001, animated by
+motion/fukinagashi001). Some of the object's vertices land far away, as with a stale or zero bone
+matrix. The capture text cannot show it: it prints every dword as a float, so packed data looks like
+garbage. The game ships its own libc (math included), so the CPU animation runs the PS4 code. Next
+test: the live GPU toggles (toggles\A_uploads_off.bat, B_caches_off.bat) while the triangles are on
+screen. If one makes them vanish, our CPU-to-GPU uploads or draw caches serve stale bone data.

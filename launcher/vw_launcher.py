@@ -53,7 +53,7 @@ GAMES = {
     },
     'kyoei': {
         'title_id': 'CUSA03562', 'app_version': '01.00',
-        'version_hint': 'the Japanese release (APP_VER 01.00)',
+        'version_hint': 'the Japanese release, param.sfo VERSION 01.03 / APP_VER 01.00',
         'name': 'City Shrouded in Shadow', 'title': 'Kyoei Toshi', 'run_dir': 'run_kyoei',
         'repo': 'https://github.com/ioritree/kyoei_toshi_pc',
         # The release feed (scripts/updates.py) is Unicorn Overlord's: never offer it here.
@@ -82,7 +82,7 @@ def run_role(argv):
 
 
 sys.path.insert(0, str(RUNTIME / 'scripts'))
-from patches import game_app_version, game_title_id  # noqa: E402
+from patches import eboot_matches, game_app_version, game_profile, game_title_id  # noqa: E402
 
 
 def load_settings(data):
@@ -113,6 +113,11 @@ def check_game(game_info, folder):
         return False, f'This is {title or "an unknown game"}, not {name} ({title_id}).'
     if version != app_version:
         return False, f'This dump is version {version}. The port needs {app_version}: {game_info["version_hint"]}.'
+    # The built-in code patches are for one eboot.bin build: another build of the same version
+    # has its code elsewhere and would crash.
+    if not eboot_matches(game, game_profile(title)):
+        return False, (f'This eboot.bin is not the build the port supports ({game_info["version_hint"]}). '
+                       'Other builds, earlier or later, are not supported.')
     return True, f'{name}  ·  {title_id}  ·  v{version}'
 
 

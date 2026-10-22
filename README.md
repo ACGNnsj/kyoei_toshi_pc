@@ -7,7 +7,11 @@ Kyoei Toshi), built on [hachi23/unicorn_overlord_pc](https://github.com/hachi23/
 
 | Dump | State |
 |---|---|
-| CUSA03562 (Japan), app 01.00 | Played through the driving chapter and beyond at 60 FPS; saving and loading work |
+| CUSA03562 (Japan, JP0700-CUSA03562_00-E060000000000001): `param.sfo` VERSION 01.03, APP_VER 01.00 | Played through the driving chapter and beyond at 60 FPS; saving and loading work |
+
+Only this dump is supported. The port's code patches are checked against its `eboot.bin`
+(SHA-256 `42b058e57358cdb0516fb39ddafe583634b03d9987a7950f8fd0c317a8f3af83`): other versions,
+earlier or later than 1.03, are not guaranteed to work.
 
 > **Work in progress.** The game has not been played to the end on this port. Known issues are
 > listed [below](#known-issues).
@@ -41,7 +45,7 @@ Extract `Kyoei-Toshi-PC-windows.zip` into its own folder and run `Kyoei Toshi.ex
 
 - Windows 10 (1903+) / 11, 64-bit.
 - A Vulkan 1.3 GPU.
-- Your own dump of the game: the folder `CUSA03562` containing `eboot.bin`, `sce_module`,
+- Your own dump of the game (the version above): the folder `CUSA03562` containing `eboot.bin`, `sce_module`,
   `sce_sys`, `module` and `DAT` (about 17 GB).
 
 ## Playing

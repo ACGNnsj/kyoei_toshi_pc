@@ -764,6 +764,7 @@ struct DcbSnapshot {
     uintptr_t base = 0;
     std::vector<u32> words;
     u64 number = 0;
+    bool started = false; ///< the GPU thread began reading this submission
     std::chrono::steady_clock::time_point at;
 };
 std::mutex dcb_snapshot_mutex;
@@ -787,7 +788,26 @@ void NoteDcb(std::span<const u32> dcb) {
     s.base = reinterpret_cast<uintptr_t>(dcb.data());
     s.words.assign(dcb.begin(), dcb.end());
     s.number = dcb_snapshot_count++;
+    s.started = false;
     s.at = std::chrono::steady_clock::now();
+}
+
+/// The GPU thread begins a submitted buffer: the oldest logged submission of it not begun yet.
+void StartDcb(std::span<const u32> dcb) {
+    if (!DcbCheck() || dcb.empty()) {
+        return;
+    }
+    std::scoped_lock lk{dcb_snapshot_mutex};
+    DcbSnapshot* oldest = nullptr;
+    for (auto& s : dcb_snapshots) {
+        if (s.base == reinterpret_cast<uintptr_t>(dcb.data()) && !s.started &&
+            (!oldest || s.number < oldest->number)) {
+            oldest = &s;
+        }
+    }
+    if (oldest) {
+        oldest->started = true;
+    }
 }
 
 void CompareDcb(uintptr_t base, uintptr_t at) {
@@ -795,8 +815,8 @@ void CompareDcb(uintptr_t base, uintptr_t at) {
         return;
     }
     std::scoped_lock lk{dcb_snapshot_mutex};
-    // Every logged submission of this buffer: more than one means the game wrote and submitted
-    // it again while the GPU thread was still reading an earlier one. The oldest is compared.
+    // Every logged submission of this buffer: one submitted after the one the GPU thread is
+    // reading (the newest begun) means the game wrote the buffer again while it was read.
     std::vector<const DcbSnapshot*> matches;
     for (const auto& s : dcb_snapshots) {
         if (s.base == base && !s.words.empty()) {
@@ -809,10 +829,34 @@ void CompareDcb(uintptr_t base, uintptr_t at) {
         return;
     }
     std::ranges::sort(matches, {}, &DcbSnapshot::number);
-    std::fprintf(stderr, "DCB check: %zu logged submissions of this buffer (of the last %zu)\n",
-                 matches.size(), dcb_snapshots.size());
-    const DcbSnapshot* found = matches.front();
+    u64 waiting = 0;
+    for (const auto& s : dcb_snapshots) {
+        waiting += !s.words.empty() && !s.started;
+    }
+    std::fprintf(stderr, "DCB check: %zu logged submissions of this buffer (of the last %zu); "
+                 "%llu submissions not begun by the GPU thread\n",
+                 matches.size(), dcb_snapshots.size(), static_cast<unsigned long long>(waiting));
     const auto* now = reinterpret_cast<const u32*>(base);
+    const size_t index = (at - base) / 4;
+    const DcbSnapshot* found = matches.front();
+    for (const auto* m : matches) {
+        size_t differ = 0;
+        for (size_t i = 0; i < m->words.size(); ++i) {
+            differ += now[i] != m->words[i];
+        }
+        std::fprintf(stderr, "DCB check:   submission %llu: %s, %.1f ms ago, %zu words changed "
+                     "since, bad packet word %s\n",
+                     static_cast<unsigned long long>(m->number),
+                     m->started ? "begun" : "not begun",
+                     std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() -
+                                                               m->at).count(),
+                     differ,
+                     index < m->words.size() && now[index] == m->words[index] ? "as submitted"
+                                                                               : "changed");
+        if (m->started) {
+            found = m; // the newest begun: the one being read
+        }
+    }
     size_t changed = 0, first = SIZE_MAX, last = 0;
     for (size_t i = 0; i < found->words.size(); ++i) {
         if (now[i] != found->words[i]) {
@@ -821,7 +865,6 @@ void CompareDcb(uintptr_t base, uintptr_t at) {
             last = i;
         }
     }
-    const size_t index = (at - base) / 4;
     const double ms = std::chrono::duration<double, std::milli>(
                           std::chrono::steady_clock::now() - found->at).count();
     std::fprintf(stderr,
@@ -844,6 +887,7 @@ void CompareDcb(uintptr_t base, uintptr_t at) {
 Liverpool::Task Liverpool::ProcessGraphics(std::span<const u32> dcb, std::span<const u32> ccb,
                                            u64 seq) {
     FIBER_ENTER(dcb_task_name);
+    StartDcb(dcb);
     // Top-level buffers enqueued for the draw preparation workers (nested IBs are not).
     Vulkan::DrawPreparation* draw_prep =
         seq != NoSeq && rasterizer ? &rasterizer->GetDrawPreparation() : nullptr;

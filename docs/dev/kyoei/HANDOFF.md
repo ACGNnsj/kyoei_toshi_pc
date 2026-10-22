@@ -234,3 +234,11 @@ next frame's embedded constants (vertex explosions that do not depend on FPS). T
 (in `kyoei_readlog_test.bat`) compares a corrupt buffer with a copy taken at submission. Note
 `VW_COPY_GPU_BUFFERS` is not a fix as it stands: SubmitDone resets its copy area while the GPU thread may
 still read an earlier copy.
+
+First `VW_DCB_CHECK` run (log run-20261022-074625): the owner saw **no vertex explosions, and fog and
+lightning drawn for the first time**; a corrupt buffer after 983 s in a cutscene. The buffer
+(0x105ab37844, 30998 words) had 3 submissions among the last 64; vs the oldest (170 ms, 55 submissions
+earlier) 23027 words had changed. That compare was against the wrong submission (the GPU thread may read
+the newest), so the check now marks the submission the GPU thread began (StartDcb), prints every logged
+submission of the buffer and the backlog. Open: why the rendering got better with the check on (its
+only side effect is a copy of each buffer at submission, i.e. a delay on the submitting thread).

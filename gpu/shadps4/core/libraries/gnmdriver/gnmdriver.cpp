@@ -106,7 +106,7 @@ extern "C" void runtime_describe_address(char* out, size_t size, uintptr_t addre
 namespace {
 struct CbWriter {
     int id = -1;
-    char name[32] = {};
+    char name[64] = {};
     uintptr_t lo = 0, hi = 0; ///< first and last address written in this run of writes
     uintptr_t caller = 0;
     std::array<uintptr_t, 10> stack{}; ///< guest return addresses (frame-pointer chain)
@@ -150,7 +150,7 @@ void NoteCbWriter(const u32* cmdbuf, uintptr_t caller, const char* function, con
     if (!enabled || !cmdbuf) {
         return;
     }
-    char name[32];
+    char name[64];
     const int id = runtime_thread_current_info(name, sizeof(name));
     const auto address = reinterpret_cast<uintptr_t>(cmdbuf);
     const u64 block = address >> 16;

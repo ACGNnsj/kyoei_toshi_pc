@@ -149,7 +149,8 @@ void runtime_thread_attach_main(void) {
 int runtime_thread_current_info(char *name, size_t size) {
     if (size) name[0]=0;
     if (!current) return -1;
-    if (size) snprintf(name,size,"%s",current->name);
+    if (size) snprintf(name,size,"%s prio %d aff %#llx",current->name,current->attr.prio,
+                       (unsigned long long)current->attr.affinity);
     return current->id;
 }
 static GuestThread *find_thread(void *handle) {

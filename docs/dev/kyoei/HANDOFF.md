@@ -296,3 +296,11 @@ Thread 7 calls come from 0x4260fe (SetVsShader), 0x425b48 (DrawIndex), 0x425fd5 
 6 from 0x4265eb (SetVgtControl). The frame-pointer stacks printed nothing useful (the chain does not
 reach the guest frames from the sceGnm functions); probe.c runtime_stack_scan now scans the stack for
 return addresses into the game instead.
+
+Stacks (log run-20261022-092202, overlaps at 126 s): both threads draw through
+0x425a4b/0x4260fe/0x425fd5 <- 0x23a7b2 <- 0x4819ee <- 0x477b15, reached from FUN_0023be90 by two paths:
+0x239057 <- 0x23cfee <- 0x372def, and 0x23ce45 <- 0x3719d3 <- 0x372bf8 (each from the thread entry
+0x321a80). The context is [r14+0x50] (r14 a renderer object, see 0x23a784): the two paths share it, so
+the game assumes they never run at the same time. Our scePthreadGetaffinity returns the set masks
+(not the cause). Open: how the PS4 keeps the two apart (same core with FIFO, or a lock/flag of ours).
+The overlap report now names each thread with its priority and core mask.

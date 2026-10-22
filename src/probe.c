@@ -170,6 +170,59 @@ static DWORD WINAPI hang_dump(void *seconds) {
     for (;;) { Sleep((DWORD)(uintptr_t)seconds*1000); runtime_thread_dump(); host_thread_dump(); runtime_report(); }
     return 0;
 }
+/* VW_FAULT_MESH=1 (City Shrouded in Shadow): the object FUN_0049fce0 (or the function at
+ * 0x498950) walks, at [rbp-0x78] of the faulting frame: its fields and its index list (this+0x60,
+ * count u16 at +0x70, into elements of this+0x58). Reads go through the backing view. */
+int runtime_memory_read_backing(uintptr_t address, void *data, uint64_t size);
+static void mesh_dump(const CONTEXT *c) {
+    uint64_t object=0;
+    if (!runtime_memory_read_backing((uintptr_t)c->Rbp-0x78,&object,8) || !object) {
+        fprintf(stderr,"Mesh: no object at [rbp-0x78]\n");
+        return;
+    }
+    uint64_t fields[32];
+    if (!runtime_memory_read_backing((uintptr_t)object,fields,sizeof(fields))) {
+        fprintf(stderr,"Mesh: object %#llx is not guest memory\n",(unsigned long long)object);
+        return;
+    }
+    fprintf(stderr,"Mesh: object %#llx\n",(unsigned long long)object);
+    for (int i=0;i<32;i+=4)
+        fprintf(stderr,"Mesh:   +%03x %016llx %016llx %016llx %016llx\n",i*8,
+                (unsigned long long)fields[i],(unsigned long long)fields[i+1],
+                (unsigned long long)fields[i+2],(unsigned long long)fields[i+3]);
+    const uint64_t elements=fields[0x58/8], list=fields[0x60/8];
+    const unsigned count=(unsigned)(fields[0x70/8] & 0xffff);
+    static int32_t index[65536];
+    if (!count || !runtime_memory_read_backing((uintptr_t)list,index,(uint64_t)count*4)) {
+        fprintf(stderr,"Mesh: index list %#llx (%u entries) not readable\n",(unsigned long long)list,count);
+        return;
+    }
+    int32_t lo=index[0], hi=index[0];
+    unsigned above=0;
+    for (unsigned i=0;i<count;++i) {
+        if (index[i]<lo) lo=index[i];
+        if (index[i]>hi) hi=index[i];
+        above+=index[i]>=(int32_t)count;
+    }
+    fprintf(stderr,"Mesh: elements %#llx, index list %#llx: %u entries, min %d, max %d, %u of them >= the entry count\n",
+            (unsigned long long)elements,(unsigned long long)list,count,lo,hi,above);
+    const unsigned at=(unsigned)c->R12;
+    for (unsigned i=0;i<count && i<16;++i) fprintf(stderr,"Mesh:   [%u] = %d\n",i,index[i]);
+    for (unsigned i=at>=8 ? at-8 : 0;i<count && i<at+8;++i) fprintf(stderr,"Mesh:   [%u] = %d%s\n",i,index[i],i==at ? "  <- r12" : "");
+    /* FUN_0049fce0's elements are 0x348 bytes with a node pointer at +8: where the pointers stop
+     * looking like addresses is about where the array ends. */
+    unsigned bad=0, first_bad=UINT32_MAX;
+    for (int32_t i=0;i<=hi && i<20000;++i) {
+        uint64_t node=0;
+        if (!runtime_memory_read_backing((uintptr_t)(elements+(uint64_t)i*0x348+8),&node,8)) break;
+        if (!node || node>>40 || node<0x100000000ull) { ++bad; if (first_bad==UINT32_MAX) first_bad=(unsigned)i; }
+    }
+    fprintf(stderr,"Mesh: elements up to %d: %u with an implausible node pointer, the first at %d\n",hi,bad,
+            first_bad==UINT32_MAX ? -1 : (int)first_bad);
+    unsigned shown=0;
+    for (unsigned i=1;i<count && shown<16;++i)
+        if (index[i]<0 || index[i]>65535) { fprintf(stderr,"Mesh:   odd [%u] = %d (%#x)\n",i,index[i],(unsigned)index[i]); ++shown; }
+}
 static int fatal_reported;
 static LONG fatal_exception(EXCEPTION_POINTERS *info) {
     if (__atomic_exchange_n(&fatal_reported,1,__ATOMIC_ACQ_REL)) { Sleep(INFINITE); }
@@ -195,6 +248,7 @@ static LONG fatal_exception(EXCEPTION_POINTERS *info) {
         if (record->ExceptionCode==EXCEPTION_ACCESS_VIOLATION && record->NumberParameters>=2)
             runtime_read_log_near((uintptr_t)record->ExceptionInformation[1],0x10000,"fault address");
     }
+    if (getenv("VW_FAULT_MESH")) mesh_dump(c);
     /* rbp chain (guest and host code keep frame pointers). */
     uintptr_t rbp=(uintptr_t)c->Rbp;
     for (int depth=0; depth<24 && rbp; ++depth) {

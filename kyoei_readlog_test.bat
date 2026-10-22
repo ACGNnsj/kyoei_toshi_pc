@@ -33,6 +33,9 @@ set "VW_DCB_CHECK=1"
 rem Which game thread writes each block of command buffer memory: two threads writing the
 rem same block at once are printed with where in the game they write from.
 set "VW_CB_THREADS=1"
+rem When the game faults in its mesh walk (0x4753c0): the object, its index list and where its
+rem element array really ends.
+set "VW_FAULT_MESH=1"
 if not exist "out\vwport.exe" (
     echo out\vwport.exe is missing: build it first ^(bash build.sh in MSYS2 CLANG64^).
     pause

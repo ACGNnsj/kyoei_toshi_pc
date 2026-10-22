@@ -273,3 +273,8 @@ stack (0x23cfee -> 0x238d5c -> 0x477984 -> 0x47b834 -> 0x480fa1: the scene updat
 unloaded NPC entries) and comes during or after a stage load, at any FPS. A timing difference FPS does
 not change: file reads finish at once on a PC. Test: `kyoei_slowread_test.bat` with
 `VW_READ_THROTTLE=60,3000` (runtime_file.c: each read sleeps 3 ms + size at 60 MB/s).
+
+`kyoei_slowread_test.bat` (log run-20261022-084052): the same fault in the stage203 load (object
+0x1007d2b7b8, index 6917, element +8 = 1.0f). Slow reads change nothing: ruled out. Next:
+`VW_FAULT_MESH=1` (probe.c mesh_dump) prints the object at [rbp-0x78], its index list (count, min, max,
+entries around r12) and the first element whose node pointer stops looking like an address.

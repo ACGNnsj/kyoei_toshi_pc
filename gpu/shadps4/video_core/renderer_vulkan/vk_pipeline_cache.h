@@ -240,6 +240,12 @@ private:
     const PreparedDraw* used_prepared = nullptr;
     tsl::robin_map<ComputePipelineKey, std::unique_ptr<ComputePipeline>> compute_pipelines;
     tsl::robin_map<GraphicsPipelineKey, std::unique_ptr<GraphicsPipeline>> graphics_pipelines;
+    /// vw: pipelines found built for other shader modules or another fetch shader than the
+    /// draw's; kept alive (command buffers in flight may use them) and never looked up again.
+    std::vector<std::unique_ptr<GraphicsPipeline>> mismatched_graphics;
+    /// vw: true if `pipeline` was built for the selection's modules and fetch shader;
+    /// otherwise it is moved to mismatched_graphics and reported.
+    bool MatchesSelection(decltype(graphics_pipelines)::iterator it);
     PipelineSelection sel{}; ///< GPU thread selection state
     ComputePipelineKey compute_key{};
     u32 num_new_pipelines{}; // new pipelines added to the cache since the game start

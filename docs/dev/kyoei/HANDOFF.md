@@ -379,3 +379,15 @@ warm-up and the synchronous path) and compiles at runtime, then is saved again. 
 the first start compiles everything (like the nocache test). Test: start 2 and 3 with kyoei.bat.
 
 This is shared vw/shadPS4 code: the Unicorn Overlord port likely has the same latent bug (not pushed).
+
+Start 2 with the fingerprints (log run-20261022-122351): 497 new-format keys loaded, 0 skipped as
+stale, and the flashing was back. So the cross-session rewrite was not this bug. Real cause: loading a
+graphics key took the fetch shader (vertex buffer layout) of the *last* stage in SwStage order
+(Fragment, TCS, TES, Vertex, Geometry): a pipeline with a geometry stage got none, because the GS
+comes after the vertex stage and has no fetch shader. Both load paths (background warm-up
+"fetch = stage.fetch", synchronous LoadPipelineStage writing sel.fetch_shader) did it; the runtime
+compile path only takes a fetch shader when a stage has one. A cached GS pipeline (light glow
+sprites expanded by a GS, likely) then bound no vertex buffers: garbage positions. Fixed in both
+paths. Also: a pipeline found for a draw is checked against the draw's shader modules and fetch
+shader; a mismatch prints "Pipeline cache: pipeline ... was built for ..." and compiles again. The
+fingerprints stay (they guard the cross-session rewrite, a real if rarer hole).

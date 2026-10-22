@@ -109,6 +109,11 @@ public:
         return key;
     }
 
+    /// vw: the shader modules it was built with (the pipeline lookup compares them).
+    const std::array<vk::ShaderModule, MaxShaderStages>& GetModules() const noexcept {
+        return stage_modules;
+    }
+
     /// vw: second draw squaring a self-scaled MIN/MAX blend, or null (vk_blend_rewrite.h).
     vk::Pipeline SquarePassHandle() const noexcept {
         return *square_pipeline;
@@ -127,6 +132,7 @@ private:
 private:
     GraphicsPipelineKey key;
     std::optional<const Shader::Gcn::FetchShaderData> fetch_shader{};
+    std::array<vk::ShaderModule, MaxShaderStages> stage_modules{};
     vk::UniquePipeline square_pipeline;
 };
 

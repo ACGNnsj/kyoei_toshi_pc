@@ -729,6 +729,35 @@ const GraphicsPipeline* PipelineCache::TryPreparedPipeline(const PreparedDraw& p
     return it != graphics_pipelines.end() ? it->second.get() : nullptr;
 }
 
+bool PipelineCache::MatchesSelection(decltype(graphics_pipelines)::iterator it) {
+    const GraphicsPipeline& pipeline = *it->second;
+    const auto& modules = pipeline.GetModules();
+    int stage = -1;
+    for (u32 i = 0; i < MaxShaderStages; ++i) {
+        if (sel.infos[i] && modules[i] != sel.modules[i]) {
+            stage = int(i);
+            break;
+        }
+    }
+    const bool fetch_differs = pipeline.GetFetchShader().has_value() != sel.fetch_shader.has_value() ||
+                               (sel.fetch_shader && !(*pipeline.GetFetchShader() == *sel.fetch_shader));
+    if (stage < 0 && !fetch_differs) {
+        return true;
+    }
+    static u32 reports = 0;
+    if (++reports <= 10 || !(reports & (reports - 1))) {
+        std::fprintf(stderr,
+                     "Pipeline cache: pipeline %#llx was built for %s than the draw's (%u so far; "
+                     "fetch shader %s, now %s); compiling it again\n",
+                     static_cast<unsigned long long>(std::hash<GraphicsPipelineKey>{}(it->first)),
+                     stage >= 0 ? "another shader module" : "another fetch shader", reports,
+                     pipeline.GetFetchShader() ? "set" : "none", sel.fetch_shader ? "set" : "none");
+    }
+    mismatched_graphics.push_back(std::move(it.value()));
+    graphics_pipelines.erase(it);
+    return false;
+}
+
 const GraphicsPipeline* PipelineCache::GetGraphicsPipeline(const DrawIndirectParams params,
                                                            const PreparedDraw* prepared) {
     SeedWorkerCaches();
@@ -753,7 +782,7 @@ const GraphicsPipeline* PipelineCache::GetGraphicsPipeline(const DrawIndirectPar
     }
     if (AsyncCompilation() && !sel.regs->stage_enable.hs_en && !EmulatorSettings.IsShaderCollect()) {
         const auto found = graphics_pipelines.find(sel.graphics_key);
-        if (found != graphics_pipelines.end()) {
+        if (found != graphics_pipelines.end() && MatchesSelection(found)) {
             return found->second.get();
         }
         if (!pending_graphics.contains(sel.graphics_key) && compiler->HasCapacity()) {

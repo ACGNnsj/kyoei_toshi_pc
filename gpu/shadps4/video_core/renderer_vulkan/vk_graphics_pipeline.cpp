@@ -54,6 +54,9 @@ GraphicsPipeline::GraphicsPipeline(
     const auto started = Clock::now();
     const vk::Device device = instance.GetDevice();
     std::ranges::copy(infos, stages.begin());
+    for (size_t i = 0; i < modules.size() && i < stage_modules.size(); ++i) {
+        stage_modules[i] = modules[i];
+    }
     BuildDescSetLayout(preloading);
     const auto debug_str = GetDebugString();
 

@@ -876,8 +876,12 @@ bool PipelineCache::LoadPipelineStage(Serialization::Archive& ar, size_t stage) 
     Shader::StageSpecialization spec{};
     spec.info = &program->info;
     size_t perm_idx{};
-    if (!LoadShaderMeta(ar, program->info, sel.fetch_shader, spec, perm_idx)) {
+    std::optional<Shader::Gcn::FetchShaderData> fetch;
+    if (!LoadShaderMeta(ar, program->info, fetch, spec, perm_idx)) {
         return false;
+    }
+    if (fetch) {
+        sel.fetch_shader = std::move(fetch); // a later stage without one must not clear it
     }
 
     std::vector<u32> spv{};
@@ -1332,7 +1336,11 @@ void PipelineCache::PumpWarmUp() {
                 usable = stage.info != nullptr;
                 infos[i] = stage.info;
                 modules[i] = stage.result;
-                fetch = stage.fetch; // the blocking load keeps the last stage's too
+                // vw: only the vertex stage has a fetch shader; the geometry stage comes after
+                // it and used to clear it (no vertex buffers bound: garbage positions).
+                if (stage.fetch) {
+                    fetch = stage.fetch;
+                }
             }
         }
         if (!usable) {

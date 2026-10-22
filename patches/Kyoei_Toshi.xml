@@ -82,11 +82,11 @@
             <Line Type="bytes" Address="0x0164a250" Value="4a6334a64881feffff00000f875ae924ff4869c6c8020000e9e4e824ff4a6304a0483dffff0000770c4c69f0c8020000e971e924ff488b7d8849ffc4e999ea24ff"/>
         </PatchList>
     </Metadata>
-    <Metadata Title="City Shrouded in Shadow" Name="Skip NULL Mesh Elements" Note="Loading the driving stage (stage203), an element of FUN_0049fce0's second loop (index under 0xffff) had a NULL pointer at +8: fault in 0x4753c0 (rsi=0x40), called at 0x49fec8. The load at 0x49febf jumps to a stub at 0x124a2a0 that skips the element (loop's next item, 0x4a00cc) when the pointer is NULL; the same read in the function at 0x498950 (0x498c0a) jumps to a stub at 0x124a2b7 that skips to its next item (0x124a285, the Skip Bad Bone Indices skip)." Author="kyoei_toshi_pc" PatchVer="0.1" AppVer="01.00" AppElf="eboot.bin" isEnabled="true">
+    <Metadata Title="City Shrouded in Shadow" Name="Skip NULL Mesh Elements" Note="Loading the driving stage (stage203), an element of FUN_0049fce0's second loop (index under 0xffff) had a NULL pointer at +8: fault in 0x4753c0 (rsi=0x40), called at 0x49fec8. The load at 0x49febf jumps to a stub at 0x124a2a0 that skips the element (loop's next item, 0x4a00cc) when the pointer is NULL or not a 40-bit address (another run read two floats there, 0xc432879a3f800000); the same read in the function at 0x498950 (0x498c0a) jumps to a stub at 0x124a2c4 that skips to its next item (0x124a285, the Skip Bad Bone Indices skip)." Author="kyoei_toshi_pc" PatchVer="0.1" AppVer="01.00" AppElf="eboot.bin" isEnabled="true">
         <PatchList>
             <Line Type="bytes" Address="0x0089febf" Value="e9dca3da0090909090"/>
-            <Line Type="bytes" Address="0x00898c0a" Value="e9a816db0090909090"/>
-            <Line Type="bytes" Address="0x0164a2a0" Value="4b8b5c3d084885db0f841e5e25ff488d7340e9115c25ff4b8b5c35084885db74c4488d7340e949e924ff"/>
+            <Line Type="bytes" Address="0x00898c0a" Value="e9b516db0090909090"/>
+            <Line Type="bytes" Address="0x0164a2a0" Value="4b8b5c3d084885db0f841e5e25ff4889de48c1ee280f85115e25ff488d7340e9045c25ff4b8b5c35084885db74b74889de48c1ee2875ae488d7340e933e924ff"/>
         </PatchList>
     </Metadata>
 </Patch>

@@ -260,3 +260,9 @@ thread 7 calls SetVgtControl at 0x105AB37814 (and 0x105A29BC1C) and thread 6, 0.
 candidates. The check now reports only a thread writing inside the range another thread wrote in the
 last 5 ms. The run faulted in the stage203 load at 0x4753c0 (NULL element pointer, FUN_0049fce0 loop 2):
 patch "Skip NULL Mesh Elements" (0x49febf, and the same read at 0x498c0a; stubs 0x124a2a0-0x124a2ca).
+
+Next run (log run-20261022-083042) hung at "Loading": a fault in 0x4753c0 again (FUN_0049fce0 loop 2,
+same element array 0x1007c5c558, index 3067, element +8 = 0xc432879a3f800000: two floats), and the fault
+report itself faulted (the write log dumped memory around rax = 1.0f) and slept forever. Fixed: the dump
+reads through the backing view. The NULL element guard also skips pointers above 40 bits. The bad index
+differs per run (7154, 3067) for the same object: the list is wrong when read, not wrong in the file.

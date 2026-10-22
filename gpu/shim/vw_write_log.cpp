@@ -15,6 +15,8 @@
 #endif
 #include <x86intrin.h>
 
+extern "C" int runtime_memory_read_backing(uintptr_t address, void* data, uint64_t size);
+
 namespace VwWriteLog {
 namespace {
 struct Entry {
@@ -122,8 +124,13 @@ extern "C" void vwgpu_dump_guest_writes(void* ucontext) {
     // The block the guest read (rax) and all logged writes into it or its neighbours.
     const std::uint64_t block = regs[0];
     for (std::uint64_t at = block - 0x30; at < block + 0x60; at += 8) {
+        // Through the backing view: rax need not be an address (a fault inside the fault
+        // report hung the game).
         std::uint64_t value = 0;
-        std::memcpy(&value, reinterpret_cast<const void*>(at), 8);
+        if (!runtime_memory_read_backing(at, &value, 8)) {
+            std::fprintf(stderr, "Write log: [%#llx] not guest memory\n", (unsigned long long)at);
+            break;
+        }
         std::fprintf(stderr, "Write log: [%#llx] = %#llx\n", (unsigned long long)at,
                      (unsigned long long)value);
     }

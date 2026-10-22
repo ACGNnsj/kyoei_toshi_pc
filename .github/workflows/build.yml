@@ -5,13 +5,11 @@
 # publishes that release (notes: the tag's message); the start program offers it as an update
 # (scripts/updates.py). Every release carries SHA256SUMS, which the updater checks.
 # The job names (Linux, Windows) are the required status checks of the main branch protection.
+# City Shrouded in Shadow: run by hand only (Actions tab). Releases are built locally with
+# packaging/package.py kyoei and uploaded; the Windows static build does not link yet.
 name: Build
 
 on:
-  pull_request:
-  push:
-    branches: [main]
-    tags: ['v[0-9]*.[0-9]*.[0-9]*']
   workflow_dispatch:
 
 concurrency:
@@ -22,8 +20,8 @@ permissions:
   contents: read
 
 env:
-  GAME: unicorn
-  TITLE: Unicorn Overlord
+  GAME: kyoei
+  TITLE: Kyoei Toshi
   # Pinned to the versions the port is developed with.
   VULKAN_HEADERS: v1.4.357
   GLSLANG: 16.0.0

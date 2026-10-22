@@ -54,6 +54,10 @@ broke here will break again for the next 3D game. Details: `docs/dev/kyoei/HANDO
 - `VW_FRAME_CAPTURE_KEY=1` + F11 captures between "display passes"; a game that draws the
   display buffer rarely makes `VW_CAPTURE_FRAMES` span minutes and hundreds of MB.
 
+- **Flicker that only happens with the pipeline cache on: diff the load path against the compile
+  path.** Here loading took the fetch shader of the last stage, so pipelines with a geometry stage
+  lost their vertex layout (random flashing triangles, City Shrouded in Shadow). The owner's hint
+  "it was fine in the run whose shader loading was slow" found it: test with `VW_PIPELINE_CACHE=0`.
 - **A pipeline cache keyed by permutation index breaks across sessions.** Each start numbers a
   shader's specializations in the order the game uses them; a later start rewrites the meta of an
   index with another specialization while old pipeline keys still name it, so the next start pairs a

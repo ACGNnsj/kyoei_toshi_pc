@@ -391,3 +391,9 @@ sprites expanded by a GS, likely) then bound no vertex buffers: garbage position
 paths. Also: a pipeline found for a draw is checked against the draw's shader modules and fetch
 shader; a mismatch prints "Pipeline cache: pipeline ... was built for ..." and compiles again. The
 fingerprints stay (they guard the cross-session rewrite, a real if rarer hole).
+
+**Confirmed (owner, two starts with kyoei.bat after 6e7a528): no flashing.** Logs run-20261022-122937 and
+-123608 loaded 497 and 514 cached pipelines (the same cache that flashed in run-20261022-122351) and
+reported 0 lookup mismatches. The flashing "vertex explosions" were the lost fetch shader. The
+Unicorn Overlord port shares this code and has the same bug for any pipeline with a geometry stage
+(not pushed anywhere).

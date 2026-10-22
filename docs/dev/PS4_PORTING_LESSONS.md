@@ -67,7 +67,8 @@ broke here will break again for the next 3D game. Details: `docs/dev/kyoei/HANDO
   cond was a thin host `pthread_cond` wrapper. Games build counting semaphores on a cond and
   take every 0 from a (timed) wait as a token, without re-checking: a spurious host wakeup, or
   a signal that races a timeout and wakes a later wait, hands out a token nobody posted. Give
-  each cond waiter its own flag so a wait returns 0 only for a signal.
+  each cond waiter its own flag so a wait returns 0 only for a signal. (City Shrouded in Shadow:
+  two job workers drew into one command buffer at once; the fix took overlaps from 10 to 0.)
 
 ## Patching game code
 

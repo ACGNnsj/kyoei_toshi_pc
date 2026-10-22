@@ -329,3 +329,10 @@ was it; overlaps with both counters at 0 points at the dispatcher's wait on obj+
 The owner felt run-20261022-092752 ran at about 15 FPS: VW_CB_THREADS scanned the guest stack
 (up to four ReadProcessMemory calls) on every sceGnm call. Stacks are now VW_CB_THREADS=2 only; 1
 records thread names and ranges and counts every overlap past the first 20.
+
+**Result, run-20261022-103721 (47 min at 30 FPS, stages 203 to 205, no crash): 0 overlapping command
+buffer writes and 0 bad packets** (run-20261022-092752 with the old cond: 10 and 12). The log counted 8
+signals that arrived as a wait timed out and 0 host wakeups without a signal: with winpthreads such a
+signal stays pending and the next wait returns at once, an extra job token. The command buffer race
+and the crashes it caused are fixed. The vertex explosions remain (from the start of the driving
+chapter): a separate cause, which also showed at 15 FPS and after a reload.

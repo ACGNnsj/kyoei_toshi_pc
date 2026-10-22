@@ -278,3 +278,13 @@ not change: file reads finish at once on a PC. Test: `kyoei_slowread_test.bat` w
 0x1007d2b7b8, index 6917, element +8 = 1.0f). Slow reads change nothing: ruled out. Next:
 `VW_FAULT_MESH=1` (probe.c mesh_dump) prints the object at [rbp-0x78], its index list (count, min, max,
 entries around r12) and the first element whose node pointer stops looking like an address.
+
+**Caught** (log run-20261022-084355, explosions on, fault in a cutscene): `CB threads: thread 6
+(sceGnmSetVgtControl from 0x4265eb) writes at 0x105a2c1668, inside 0x105a2c0090-0x105a2c16b4 that
+thread 7 wrote 0.000 ms before (last sceGnmSetVsShader from 0x4260fe)`; 47 ms later the GPU thread hit
+a bad packet at 0x105a2c1674 in the buffer at 0x105a29bc4c. Again at 245 s (thread 7: SetPsShader350
+from 0x425fd5). Two game threads write one command buffer at the same time: the corrupt buffers (and
+likely the explosions) come from that. The draw function at 0x434a10 takes its context (cb at
+ctx+0x80) as an argument. The overlap report now prints both threads' guest stacks (frame-pointer chain)
+to find where they get the same context. Also: the run without explosions had a very slow pipeline
+warm-up (64 of 1613 in 10 s; normally all in ~4 s), i.e. different thread timing.

@@ -109,6 +109,7 @@ struct CbWriter {
     char name[32] = {};
     uintptr_t lo = 0, hi = 0; ///< first and last address written in this run of writes
     uintptr_t caller = 0;
+    std::array<uintptr_t, 10> stack{}; ///< guest return addresses (frame-pointer chain)
     const char* function = "";
     std::chrono::steady_clock::time_point at;
 };
@@ -120,7 +121,38 @@ std::mutex cb_writers_mutex;
 std::array<CbBlock, 1024> cb_blocks;
 int cb_reports = 0;
 
-void NoteCbWriter(const u32* cmdbuf, uintptr_t caller, const char* function) {
+/// Guest return addresses along the frame-pointer chain from the sceGnm function's frame (its
+/// saved rbp is the guest caller's); guest stacks are small, so the chain is checked to rise.
+std::array<uintptr_t, 10> GuestStack(const void* frame) {
+    std::array<uintptr_t, 10> out{};
+    const auto here = reinterpret_cast<uintptr_t>(frame);
+    auto rbp = frame ? *static_cast<const uintptr_t*>(frame) : 0;
+    if (rbp <= here || rbp - here > 0x100000) {
+        return out;
+    }
+    for (size_t i = 0; i < out.size() && rbp; ++i) {
+        const auto* f = reinterpret_cast<const uintptr_t*>(rbp);
+        out[i] = f[1];
+        if (f[0] <= rbp || f[0] - rbp > 0x100000) {
+            break;
+        }
+        rbp = f[0];
+    }
+    return out;
+}
+
+void PrintStack(const char* who, const std::array<uintptr_t, 10>& stack) {
+    for (const auto address : stack) {
+        if (!address) {
+            break;
+        }
+        char where[160];
+        runtime_describe_address(where, sizeof(where), address);
+        std::fprintf(stderr, "CB threads:   %s: %s\n", who, where);
+    }
+}
+
+void NoteCbWriter(const u32* cmdbuf, uintptr_t caller, const char* function, const void* frame) {
     static const bool enabled = [] {
         const char* v = std::getenv("VW_CB_THREADS");
         return v && v[0] == '1';
@@ -155,6 +187,7 @@ void NoteCbWriter(const u32* cmdbuf, uintptr_t caller, const char* function) {
             continue;
         }
         ++cb_reports;
+        const auto stack = GuestStack(frame);
         char was[160], is[160];
         runtime_describe_address(was, sizeof(was), w.caller);
         runtime_describe_address(is, sizeof(is), caller);
@@ -165,6 +198,8 @@ void NoteCbWriter(const u32* cmdbuf, uintptr_t caller, const char* function) {
                      static_cast<unsigned long long>(w.lo), static_cast<unsigned long long>(w.hi),
                      w.id, w.name, std::chrono::duration<double, std::milli>(now - w.at).count(),
                      w.function, was);
+        PrintStack("writing now", stack);
+        PrintStack("wrote before", w.stack);
         std::fflush(stderr);
     }
     if (!own || now - own->at > recent) {
@@ -177,12 +212,14 @@ void NoteCbWriter(const u32* cmdbuf, uintptr_t caller, const char* function) {
     own->lo = std::min(own->lo, address);
     own->hi = std::max(own->hi, address);
     own->caller = caller;
+    own->stack = GuestStack(frame);
     own->function = function;
     own->at = now;
 }
 } // namespace
 #define VW_NOTE_CB(cmdbuf) \
-    NoteCbWriter(cmdbuf, reinterpret_cast<uintptr_t>(__builtin_return_address(0)), __func__)
+    NoteCbWriter(cmdbuf, reinterpret_cast<uintptr_t>(__builtin_return_address(0)), __func__, \
+                 __builtin_frame_address(0))
 
 static inline u32* WriteTrailingNop(u32* cmdbuf, u32 data_block_size) {
     auto* nop = reinterpret_cast<PM4CmdNop*>(cmdbuf);

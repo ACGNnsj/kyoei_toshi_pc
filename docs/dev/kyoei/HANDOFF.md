@@ -411,3 +411,9 @@ each image written back ("GPU: image ... is written back for the CPU"). kyoei_60
 kyoei.bat now runs at 60. Save icons: right again (only the 228x128 linear target was added to the
 write-backs). New: the pause menu background is garbage (blocky tiles, wrong colours). Open: whether it
 was right before, and whether it breaks only after a save (the icon write-back).
+
+Menu background check (log run-20261022-131424, kyoei.bat at 60 FPS): the owner opened the pause menu
+before and after a save (86 s; the 228x128 icon target written back at a new address 0x10f2c20000):
+background right both times, icon right. The garbage background of run-20261022-124256 did not come
+back: intermittent, cause unknown. If it returns: F11 with the menu open, and note whether a save
+came before.

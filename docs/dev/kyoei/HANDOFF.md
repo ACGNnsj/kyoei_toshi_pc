@@ -416,4 +416,8 @@ Menu background check (log run-20261022-131424, kyoei.bat at 60 FPS): the owner 
 before and after a save (86 s; the 228x128 icon target written back at a new address 0x10f2c20000):
 background right both times, icon right. The garbage background of run-20261022-124256 did not come
 back: intermittent, cause unknown. If it returns: F11 with the menu open, and note whether a save
-came before.
+came before. Owner's history of it: garbage from the
+first runs, right for a while after the readback changes, garbage once more right after the icon
+change (run-20261022-124256), right again now. So it comes and goes between starts with the same
+settings: likely a CPU read of GPU-written data that races the write-back (the game builds the menu
+background from the frame, as it does the icon). Needs a capture of a bad start.

@@ -433,3 +433,10 @@ through the sysmodule, not the eboot's import table), and the port draws that li
 (vw_overlay.cpp HandleChoiceEvent/ChoiceBox), with South (A/Cross) = OK hard-coded. It now follows
 VW_ENTER_BUTTON: with "circle", East (B/Circle) = OK and South = cancel, and the footer says so. The
 profile sets VW_ENTER_BUTTON=circle again (also the system param 1000).
+
+Save icon and menu background garbage, solved (packaged build, 2026-10-22): both are drawn once, and
+with asynchronous shaders a draw whose pipeline is still compiling is skipped, leaving whatever the
+target held. Garbage on the first start (empty cache), on an early menu open before the warm-up
+reached its pipelines, and on the first save; right once compiled. GetGraphicsPipeline now waits for
+a compiling pipeline from a budget (VW_SHADER_WAIT_MS, default 400 ms, refilled at a quarter of that
+per second) before it skips the draw.

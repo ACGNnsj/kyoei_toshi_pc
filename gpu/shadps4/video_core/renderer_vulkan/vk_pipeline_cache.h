@@ -142,6 +142,8 @@ public:
     bool LoadGraphicsPipeline(Serialization::Archive& ar);
     bool LoadPipelineStage(Serialization::Archive& ar, size_t stage);
 
+    /// vw: GetGraphicsPipelineOnce, waiting a little (VW_SHADER_WAIT_MS) for a pipeline whose
+    /// shaders or pipeline are still compiling instead of skipping the draw at once.
     const GraphicsPipeline* GetGraphicsPipeline(const DrawIndirectParams params = {},
                                                 const PreparedDraw* prepared = nullptr);
 
@@ -239,6 +241,11 @@ private:
     u64 prepared_hits = 0, prepared_misses = 0;
     const PreparedDraw* used_prepared = nullptr;
     tsl::robin_map<ComputePipelineKey, std::unique_ptr<ComputePipeline>> compute_pipelines;
+    const GraphicsPipeline* GetGraphicsPipelineOnce(const DrawIndirectParams params,
+                                                    const PreparedDraw* prepared);
+    bool draw_compiling = false; ///< the last GetGraphicsPipelineOnce found its pipeline compiling
+    double wait_budget_ms = -1;  ///< VW_SHADER_WAIT_MS budget left (token bucket)
+    std::chrono::steady_clock::time_point wait_refilled{};
     tsl::robin_map<GraphicsPipelineKey, std::unique_ptr<GraphicsPipeline>> graphics_pipelines;
     /// vw: pipelines found built for other shader modules or another fetch shader than the
     /// draw's; kept alive (command buffers in flight may use them) and never looked up again.

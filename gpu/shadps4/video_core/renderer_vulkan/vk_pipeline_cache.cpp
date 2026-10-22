@@ -3,6 +3,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <thread>
 #include <cstdlib>
 #include <cstdio>
 #include <cstring>
@@ -758,8 +759,45 @@ bool PipelineCache::MatchesSelection(decltype(graphics_pipelines)::iterator it) 
     return false;
 }
 
+// vw: with asynchronous shaders a draw whose pipeline is still compiling is skipped. Fine for a
+// frame drawn again 1/60 s later; wrong for one drawn once: City Shrouded in Shadow's save icon
+// and pause menu background came out as garbage whenever their pipelines were new (first start,
+// or before the warm-up reached them). The draw waits for its compile instead, from a budget of
+// VW_SHADER_WAIT_MS (default 400) that refills at a quarter of that per second, so a burst of
+// new pipelines in play still skips draws rather than stall for long. 0: never wait.
 const GraphicsPipeline* PipelineCache::GetGraphicsPipeline(const DrawIndirectParams params,
                                                            const PreparedDraw* prepared) {
+    const GraphicsPipeline* pipeline = GetGraphicsPipelineOnce(params, prepared);
+    if (pipeline || !draw_compiling) {
+        return pipeline;
+    }
+    static const double capacity = [] {
+        const char* v = std::getenv("VW_SHADER_WAIT_MS");
+        return v && *v ? std::max(0.0, std::atof(v)) : 400.0;
+    }();
+    using Clock = std::chrono::steady_clock;
+    auto now = Clock::now();
+    if (wait_budget_ms < 0) {
+        wait_budget_ms = capacity;
+    } else {
+        const double refill = std::chrono::duration<double>(now - wait_refilled).count() * capacity / 4;
+        wait_budget_ms = std::min(capacity, wait_budget_ms + refill);
+    }
+    wait_refilled = now;
+    while (!pipeline && draw_compiling && wait_budget_ms > 0) {
+        std::this_thread::sleep_for(std::chrono::microseconds{500});
+        pipeline = GetGraphicsPipelineOnce(params, prepared);
+        const auto later = Clock::now();
+        wait_budget_ms -= std::chrono::duration<double, std::milli>(later - now).count();
+        now = later;
+    }
+    wait_refilled = now;
+    return pipeline;
+}
+
+const GraphicsPipeline* PipelineCache::GetGraphicsPipelineOnce(const DrawIndirectParams params,
+                                                               const PreparedDraw* prepared) {
+    draw_compiling = false;
     SeedWorkerCaches();
     PublishShaders();
     PublishGraphics();
@@ -777,6 +815,7 @@ const GraphicsPipeline* PipelineCache::GetGraphicsPipeline(const DrawIndirectPar
     if (!RefreshGraphicsKey(sel)) {
         if (sel.compilation_pending) {
             ++g_vw_pending_draws;
+            draw_compiling = true;
         }
         return nullptr;
     }
@@ -816,6 +855,7 @@ const GraphicsPipeline* PipelineCache::GetGraphicsPipeline(const DrawIndirectPar
             }
         }
         ++g_vw_pending_draws;
+        draw_compiling = true;
         return nullptr;
     }
     const auto [it, is_new] = graphics_pipelines.try_emplace(sel.graphics_key);

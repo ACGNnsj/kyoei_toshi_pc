@@ -252,3 +252,11 @@ allocateFromCommandBuffer block whose NOP header is missing (overwritten by the 
 overlap: two writers with different command pointers on one buffer. Next test: `VW_CB_THREADS=1`
 (instrumented the 44 sceGnm functions that take cmdbuf) prints two guest threads writing the same
 64 KiB block within 1 ms, with their call sites.
+
+`VW_CB_THREADS` run (log run-20261022-082343): the 20 reports were all one benign pattern, every frame:
+thread 7 calls SetVgtControl at 0x105AB37814 (and 0x105A29BC1C) and thread 6, 0.1-0.5 ms later, at
+0x105AB37844 (0x105A29BC4C), 0x30 bytes on: a handoff between adjacent pieces of buffer, not an overlap
+(most frames are fine). 0x105ab37844 is the buffer that gets corrupted, so threads 6 and 7 are the
+candidates. The check now reports only a thread writing inside the range another thread wrote in the
+last 5 ms. The run faulted in the stage203 load at 0x4753c0 (NULL element pointer, FUN_0049fce0 loop 2):
+patch "Skip NULL Mesh Elements" (0x49febf, and the same read at 0x498c0a; stubs 0x124a2a0-0x124a2ca).

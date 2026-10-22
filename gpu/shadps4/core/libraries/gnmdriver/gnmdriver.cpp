@@ -97,23 +97,27 @@ static void WaitGpuIdle() {
 }
 
 // Write a special ending NOP packet with N DWs data block
-// vw: VW_CB_THREADS=1 — which guest thread writes each 64 KiB block of command buffer memory.
-// Two threads writing the same block within 1 ms (one draw context written at once: a packet
-// written over another one) are printed with their call sites in the game; the first 20.
+// vw: VW_CB_THREADS=1 — the range of command buffer memory each guest thread writes through
+// these functions, per 64 KiB block. A thread writing inside the range another thread wrote in
+// the last 5 ms (one buffer written by two threads: a packet written over another one) is
+// printed with both call sites in the game; the first 20.
 extern "C" int runtime_thread_current_info(char* name, size_t size);
 extern "C" void runtime_describe_address(char* out, size_t size, uintptr_t address);
 namespace {
 struct CbWriter {
-    u64 block = 0;
     int id = -1;
     char name[32] = {};
+    uintptr_t lo = 0, hi = 0; ///< first and last address written in this run of writes
     uintptr_t caller = 0;
-    const u32* cmdbuf = nullptr;
     const char* function = "";
     std::chrono::steady_clock::time_point at;
 };
+struct CbBlock {
+    u64 block = 0;
+    std::array<CbWriter, 4> writers;
+};
 std::mutex cb_writers_mutex;
-std::array<CbWriter, 1024> cb_writers;
+std::array<CbBlock, 1024> cb_blocks;
 int cb_reports = 0;
 
 void NoteCbWriter(const u32* cmdbuf, uintptr_t caller, const char* function) {
@@ -126,32 +130,55 @@ void NoteCbWriter(const u32* cmdbuf, uintptr_t caller, const char* function) {
     }
     char name[32];
     const int id = runtime_thread_current_info(name, sizeof(name));
-    const u64 block = reinterpret_cast<uintptr_t>(cmdbuf) >> 16;
+    const auto address = reinterpret_cast<uintptr_t>(cmdbuf);
+    const u64 block = address >> 16;
     const auto now = std::chrono::steady_clock::now();
+    constexpr auto recent = std::chrono::milliseconds(5);
     std::scoped_lock lk{cb_writers_mutex};
-    auto& w = cb_writers[block % cb_writers.size()];
-    if (w.block == block && w.id != id && now - w.at < std::chrono::milliseconds(1) &&
-        cb_reports < 20) {
+    auto& b = cb_blocks[block % cb_blocks.size()];
+    if (b.block != block) {
+        b = CbBlock{};
+        b.block = block;
+    }
+    CbWriter* own = nullptr;
+    CbWriter* oldest = &b.writers[0];
+    for (auto& w : b.writers) {
+        if (w.id == id && w.at != std::chrono::steady_clock::time_point{}) {
+            own = &w;
+            continue;
+        }
+        if (w.at < oldest->at) {
+            oldest = &w;
+        }
+        if (w.at == std::chrono::steady_clock::time_point{} || now - w.at > recent ||
+            address < w.lo || address > w.hi || cb_reports >= 20) {
+            continue;
+        }
         ++cb_reports;
         char was[160], is[160];
         runtime_describe_address(was, sizeof(was), w.caller);
         runtime_describe_address(is, sizeof(is), caller);
         std::fprintf(stderr,
-                     "CB threads: block %#llx written by thread %d '%s' (%s at %p, from %s) and "
-                     "%.3f ms later by thread %d '%s' (%s at %p, from %s)\n",
-                     static_cast<unsigned long long>(block << 16), w.id, w.name, w.function,
-                     static_cast<const void*>(w.cmdbuf), was,
-                     std::chrono::duration<double, std::milli>(now - w.at).count(), id, name,
-                     function, static_cast<const void*>(cmdbuf), is);
+                     "CB threads: thread %d '%s' (%s from %s) writes at %#llx, inside "
+                     "%#llx-%#llx that thread %d '%s' wrote %.3f ms before (last %s from %s)\n",
+                     id, name, function, is, static_cast<unsigned long long>(address),
+                     static_cast<unsigned long long>(w.lo), static_cast<unsigned long long>(w.hi),
+                     w.id, w.name, std::chrono::duration<double, std::milli>(now - w.at).count(),
+                     w.function, was);
         std::fflush(stderr);
     }
-    w.block = block;
-    w.id = id;
-    std::memcpy(w.name, name, sizeof(name));
-    w.caller = caller;
-    w.cmdbuf = cmdbuf;
-    w.function = function;
-    w.at = now;
+    if (!own || now - own->at > recent) {
+        own = own ? own : oldest;
+        *own = CbWriter{};
+        own->id = id;
+        std::memcpy(own->name, name, sizeof(name));
+        own->lo = own->hi = address;
+    }
+    own->lo = std::min(own->lo, address);
+    own->hi = std::max(own->hi, address);
+    own->caller = caller;
+    own->function = function;
+    own->at = now;
 }
 } // namespace
 #define VW_NOTE_CB(cmdbuf) \

@@ -15,6 +15,7 @@
 #include <pthread.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#include <time.h>
 #ifdef _WIN32
 #include <windows.h>
 /* 64-bit sizes and times; directories are never opened as CRT descriptors. */
@@ -481,6 +482,28 @@ void runtime_read_log_near(uintptr_t address,uint64_t radius,const char *label) 
         ++shown;
     }
 }
+/* VW_READ_THROTTLE=<MB/s>[,<latency in us>]: each file read takes about as long as on the PS4's
+ * hard disk. Reads on a PC finish at once; a game may count on a load taking frames (a test). */
+static void read_throttle(int64_t got) {
+    static int configured;
+    static double bytes_per_ns;
+    static uint64_t latency_ns;
+    if (!__atomic_load_n(&configured,__ATOMIC_ACQUIRE)) {
+        const char *v=getenv("VW_READ_THROTTLE");
+        double mbps=v ? strtod(v,NULL) : 0;
+        const char *comma=v ? strchr(v,',') : NULL;
+        latency_ns=comma ? strtoull(comma+1,NULL,10)*1000 : 0;
+        bytes_per_ns=mbps>0 ? mbps*1e6/1e9 : 0;
+        __atomic_store_n(&configured,1,__ATOMIC_RELEASE);
+    }
+    if (got<=0 || (bytes_per_ns<=0 && !latency_ns)) return;
+    uint64_t ns=latency_ns+(bytes_per_ns>0 ? (uint64_t)((double)got/bytes_per_ns) : 0);
+#ifdef _WIN32
+    compat_sleep_ns(ns);
+#else
+    struct timespec t={(time_t)(ns/1000000000u),(long)(ns%1000000000u)}; nanosleep(&t,NULL);
+#endif
+}
 static int64_t do_read(int fd,void *buffer,uint64_t size) {
     int h=host_fd(fd);
     if (h<0) return -EBADF;
@@ -488,6 +511,7 @@ static int64_t do_read(int fd,void *buffer,uint64_t size) {
     int64_t position=read_log_enabled() ? host_lseek(h,0,SEEK_CUR) : 0;
     ssize_t n=host_read(h,buffer,size);
     read_log_note(fd,buffer,size,position,n);
+    read_throttle(n);
     if (n<0) { if (audio_trace()) printf("Audio trace: read(fd %d, %llu) failed, errno %d\n",fd,(unsigned long long)size,errno); return -errno; }
     __atomic_add_fetch(&reads,1,__ATOMIC_RELAXED); __atomic_add_fetch(&bytes_read,(uint64_t)n,__ATOMIC_RELAXED);
     return n;
@@ -498,6 +522,7 @@ static int64_t do_pread(int fd,void *buffer,uint64_t size,int64_t offset) {
     touch_for_write(buffer,size);
     ssize_t n=pread(h,buffer,size,offset);
     read_log_note(fd,buffer,size,offset,n);
+    read_throttle(n);
     if (n<0) { if (audio_trace()) printf("Audio trace: pread(fd %d, %llu @%lld) failed, errno %d\n",fd,(unsigned long long)size,(long long)offset,errno); return -errno; }
     __atomic_add_fetch(&reads,1,__ATOMIC_RELAXED); __atomic_add_fetch(&bytes_read,(uint64_t)n,__ATOMIC_RELAXED);
     return n;

@@ -266,3 +266,10 @@ same element array 0x1007c5c558, index 3067, element +8 = 0xc432879a3f800000: tw
 report itself faulted (the write log dumped memory around rax = 1.0f) and slept forever. Fixed: the dump
 reads through the backing view. The NULL element guard also skips pointers above 40 bits. The bad index
 differs per run (7154, 3067) for the same object: the list is wrong when read, not wrong in the file.
+
+Run run-20261022-083630: fault in 0x4753c0 again before any explosion (object 0x1007d2b7b8, index 1227,
+element +8 = 0x3f800000, below 40 bits). No `CB threads` overlap. Every one of these faults has the same
+stack (0x23cfee -> 0x238d5c -> 0x477984 -> 0x47b834 -> 0x480fa1: the scene update, the family of the
+unloaded NPC entries) and comes during or after a stage load, at any FPS. A timing difference FPS does
+not change: file reads finish at once on a PC. Test: `kyoei_slowread_test.bat` with
+`VW_READ_THROTTLE=60,3000` (runtime_file.c: each read sleeps 3 ms + size at 60 MB/s).

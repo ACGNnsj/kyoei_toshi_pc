@@ -34,8 +34,57 @@ namespace Serialization {
 /* You should increment versions below once corresponding serialization scheme is changed. */
 static constexpr u32 ShaderBinaryVersion = 8u; // no motion vector outputs or scene size
 static constexpr u32 ShaderMetaVersion = 8u;   // ImageResource without needs_native
-static constexpr u32 PipelineKeyVersion = 6u;  // GraphicsPipelineKey without motion_vectors
+static constexpr u32 PipelineKeyVersion = 7u;  // graphics keys end with stage meta fingerprints
 } // namespace Serialization
+
+namespace {
+// vw: stage hashes, shader meta and SPIR-V names hold the permutation *index*. A later session
+// that compiles a program before the warm-up merged it numbers its permutations from 0 again
+// and rewrites "<hash>.meta" with another specialization, while older pipeline keys that name
+// the same stage hash keep the vertex layout of the old one. Loading such a key built the new
+// shader with the old vertex attributes: garbage positions in City Shrouded in Shadow (huge
+// flashing triangles). Each graphics key now records a fingerprint of every stage's meta blob
+// as saved; a key whose stage meta changed since is not loaded (the pipeline compiles at
+// runtime and is saved again with the current fingerprints).
+std::mutex meta_fingerprint_mutex;
+std::unordered_map<u64, u64> meta_fingerprints;
+std::atomic<u32> stale_keys{0};
+
+u64 Fingerprint(std::span<const u8> blob) {
+    return blob.empty() ? 0 : XXH3_64bits(blob.data(), blob.size());
+}
+
+void NoteMetaFingerprint(u64 stage_hash, u64 fingerprint) {
+    std::scoped_lock lk{meta_fingerprint_mutex};
+    meta_fingerprints[stage_hash] = fingerprint;
+}
+
+/// The fingerprint of the stage meta this session saved or read; else the store's copy.
+u64 MetaFingerprint(u64 stage_hash) {
+    {
+        std::scoped_lock lk{meta_fingerprint_mutex};
+        if (const auto it = meta_fingerprints.find(stage_hash); it != meta_fingerprints.end()) {
+            return it->second;
+        }
+    }
+    std::vector<u8> blob;
+    Storage::DataBase::Instance().Load(Storage::BlobType::ShaderMeta,
+                                       fmt::format("{:#018x}", stage_hash), blob);
+    const u64 fingerprint = Fingerprint(blob);
+    NoteMetaFingerprint(stage_hash, fingerprint);
+    return fingerprint;
+}
+
+void ReportStaleKey(u64 stage_hash, u64 saved, u64 now) {
+    const u32 n = stale_keys.fetch_add(1, std::memory_order_relaxed) + 1;
+    if (n <= 5 || !(n & (n - 1))) {
+        LOG_WARNING(Render_Vulkan,
+                    "Pipeline cache: {} keys skipped, stage meta {:#018x} rewritten since the key "
+                    "was saved (fingerprint {:#018x}, now {:#018x})",
+                    n, stage_hash, saved, now);
+    }
+}
+} // namespace
 
 namespace Vulkan {
 
@@ -579,6 +628,11 @@ void RegisterPipelineData(const GraphicsPipelineKey& key, u64 hash,
 
     key.Serialize(ar);
     sdata.Serialize(ar);
+    std::array<u64, MaxShaderStages> fingerprints{};
+    for (u32 i = 0; i < MaxShaderStages; ++i) {
+        fingerprints[i] = key.stage_hashes[i] ? MetaFingerprint(key.stage_hashes[i]) : 0;
+    }
+    pldata.Write(fingerprints.data(), sizeof(fingerprints));
 
     Storage::DataBase::Instance().Save(Storage::BlobType::PipelineKey,
                                        fmt::format("g_{:#018x}", hash), ar.TakeOff());
@@ -604,8 +658,10 @@ void RegisterShaderMeta(const Shader::Info& info,
     spec.Serialize(ar);
     info.Serialize(ar);
 
+    auto blob = ar.TakeOff();
+    NoteMetaFingerprint(perm_hash, Fingerprint(blob));
     Storage::DataBase::Instance().Save(Storage::BlobType::ShaderMeta,
-                                       fmt::format("{:#018x}", perm_hash), ar.TakeOff());
+                                       fmt::format("{:#018x}", perm_hash), std::move(blob));
 }
 
 void RegisterShaderBinary(std::vector<u32>&& spv, u64 pgm_hash, size_t perm_idx) {
@@ -753,6 +809,27 @@ bool PipelineCache::LoadGraphicsPipeline(Serialization::Archive& ar) {
 
     GraphicsPipeline::SerializationSupport sdata{};
     sdata.Deserialize(ar);
+    std::array<u64, MaxShaderStages> fingerprints{};
+    Serialization::Reader{ar}.Read(fingerprints.data(), sizeof(fingerprints));
+
+    std::array<std::vector<u8>, MaxShaderStages> meta_blobs;
+    for (int stage_idx = 0; stage_idx < MaxShaderStages; ++stage_idx) {
+        const auto& hash = sel.graphics_key.stage_hashes[stage_idx];
+        if (!hash) {
+            continue;
+        }
+        Storage::DataBase::Instance().Load(Storage::BlobType::ShaderMeta,
+                                           fmt::format("{:#018x}", hash), meta_blobs[stage_idx]);
+        if (meta_blobs[stage_idx].empty()) {
+            return false;
+        }
+        const u64 now = Fingerprint(meta_blobs[stage_idx]);
+        NoteMetaFingerprint(hash, now);
+        if (now != fingerprints[stage_idx]) {
+            ReportStaleKey(hash, fingerprints[stage_idx], now);
+            return false;
+        }
+    }
 
     for (int stage_idx = 0; stage_idx < MaxShaderStages; ++stage_idx) {
         const auto& hash = sel.graphics_key.stage_hashes[stage_idx];
@@ -760,14 +837,7 @@ bool PipelineCache::LoadGraphicsPipeline(Serialization::Archive& ar) {
             continue;
         }
 
-        std::vector<u8> meta_blob;
-        Storage::DataBase::Instance().Load(Storage::BlobType::ShaderMeta,
-                                           fmt::format("{:#018x}", hash), meta_blob);
-        if (meta_blob.empty()) {
-            return false;
-        }
-
-        Serialization::Archive meta_ar{std::move(meta_blob)};
+        Serialization::Archive meta_ar{std::move(meta_blobs[stage_idx])};
 
         if (!LoadPipelineStage(meta_ar, stage_idx)) {
             return false;
@@ -1000,6 +1070,7 @@ struct PipelineCache::WarmStage {
     Shader::StageSpecialization spec{};
     std::optional<Shader::Gcn::FetchShaderData> fetch;
     size_t perm_idx{};
+    u64 fingerprint = 0; ///< of the meta blob read
     vk::ShaderModule module{};
     // GPU thread, from the merge on.
     bool merged = false;
@@ -1096,6 +1167,7 @@ void PipelineCache::ReadWarmEntry(BackgroundWarmup& warm, std::vector<u8>&& data
     BackgroundWarmup::Entry entry{};
     entry.compute = is_compute != 0;
     std::array<u64, MaxShaderStages> hashes{};
+    std::array<u64, MaxShaderStages> fingerprints{};
     if (entry.compute) {
         entry.compute_key.Deserialize(ar);
         ComputePipeline::SerializationSupport sdata{};
@@ -1104,6 +1176,7 @@ void PipelineCache::ReadWarmEntry(BackgroundWarmup& warm, std::vector<u8>&& data
     } else {
         entry.graphics_key.Deserialize(ar);
         entry.sdata.Deserialize(ar);
+        Serialization::Reader{ar}.Read(fingerprints.data(), sizeof(fingerprints));
         for (u32 i = 0; i < MaxShaderStages; ++i) {
             hashes[i] = entry.graphics_key.stage_hashes[i];
         }
@@ -1124,6 +1197,8 @@ void PipelineCache::ReadWarmEntry(BackgroundWarmup& warm, std::vector<u8>&& data
             u64 module_time = 0;
             std::vector<u8> meta_blob;
             db.Load(Storage::BlobType::ShaderMeta, fmt::format("{:#018x}", hashes[i]), meta_blob);
+            stage->fingerprint = Fingerprint(meta_blob);
+            NoteMetaFingerprint(hashes[i], stage->fingerprint);
             if (!meta_blob.empty()) {
                 Serialization::Archive meta_ar{std::move(meta_blob)};
                 if (LoadShaderMeta(meta_ar, stage->program->info, stage->fetch, stage->spec,
@@ -1146,6 +1221,10 @@ void PipelineCache::ReadWarmEntry(BackgroundWarmup& warm, std::vector<u8>&& data
             if (!stage->module) {
                 stage->merged = true; // unusable: info stays null
             }
+        }
+        if (!entry.compute && stage->fingerprint != fingerprints[i]) {
+            ReportStaleKey(hashes[i], fingerprints[i], stage->fingerprint);
+            return skip();
         }
         entry.stages[i] = stage;
     }

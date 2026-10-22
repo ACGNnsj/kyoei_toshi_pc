@@ -361,3 +361,21 @@ pipelines are wrong for these draws (a key that misses some state, e.g. the vert
 would give a wrong vertex layout: garbage positions that change with each frame's data), or with a
 slow warm-up these draws were simply skipped (async shaders) while their pipelines compiled. Next:
 kyoei_nocache_test.bat (VW_PIPELINE_CACHE=0, every pipeline compiled fresh, the cache untouched).
+
+**kyoei_nocache_test.bat (VW_PIPELINE_CACHE=0): no flashing at all, and no stutter.** The pipeline
+cache is the cause. Mechanism (vk_pipeline_serialization.cpp): stage hashes, "<stage hash>.meta" and
+"<pgm>_<index>.spv" are all named by the permutation *index*. A session that compiles a program before
+the background warm-up merged it numbers its permutations from 0 again and rewrites the meta and SPIR-V
+of that index with another specialization; older g_*.key files naming the same stage hash keep the
+vertex attributes/bindings (sdata) of the old one. The next start builds the new shader with the old
+vertex layout, and draws whose per-frame data differ (car light glows) get garbage positions. In the
+cache on disk 37 of 1961 graphics keys name a meta rewritten after the key was saved (evidence, not
+proof: a rewrite may hold the same spec).
+
+Fix: graphics keys now end with a fingerprint (XXH3) of each stage's meta blob as saved
+(PipelineKeyVersion 7); a key whose stage meta changed since is skipped at load (both the background
+warm-up and the synchronous path) and compiles at runtime, then is saved again. The log prints
+"Pipeline cache: N keys skipped, stage meta ... rewritten". The version bump skips every old key once:
+the first start compiles everything (like the nocache test). Test: start 2 and 3 with kyoei.bat.
+
+This is shared vw/shadPS4 code: the Unicorn Overlord port likely has the same latent bug (not pushed).

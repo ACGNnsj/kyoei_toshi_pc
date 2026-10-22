@@ -421,3 +421,8 @@ first runs, right for a while after the readback changes, garbage once more righ
 change (run-20261022-124256), right again now. So it comes and goes between starts with the same
 settings: likely a CPU read of GPU-written data that races the write-back (the game builds the menu
 background from the frame, as it does the icon). Needs a capture of a bad start.
+
+Buttons: the game confirms with circle in its menus, but its save/load list confirms with cross (Xbox
+B goes back). Not the system enter button: the eboot does not import sceSystemServiceParamGetInt at
+all, so VW_ENTER_BUTTON (added to runtime_services.c, 0 circle / 1 cross) changes nothing here and
+the profile no longer sets it. The save list's buttons are the game's own (maybe its Lua UI scripts).

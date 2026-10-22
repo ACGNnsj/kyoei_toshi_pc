@@ -426,3 +426,10 @@ Buttons: the game confirms with circle in its menus, but its save/load list conf
 B goes back). Not the system enter button: the eboot does not import sceSystemServiceParamGetInt at
 all, so VW_ENTER_BUTTON (added to runtime_services.c, 0 circle / 1 cross) changes nothing here and
 the profile no longer sets it. The save list's buttons are the game's own (maybe its Lua UI scripts).
+
+Correction: the save/load list IS the system dialog. The game loads SAVE_DATA_DIALOG with
+sceSysmoduleLoadModule and calls sceSaveDataDialogOpen (strings near 0x109f20c; the imports come
+through the sysmodule, not the eboot's import table), and the port draws that list itself
+(vw_overlay.cpp HandleChoiceEvent/ChoiceBox), with South (A/Cross) = OK hard-coded. It now follows
+VW_ENTER_BUTTON: with "circle", East (B/Circle) = OK and South = cancel, and the footer says so. The
+profile sets VW_ENTER_BUTTON=circle again (also the system param 1000).

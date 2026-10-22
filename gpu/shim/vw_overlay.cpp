@@ -684,6 +684,16 @@ void TextEntryBox() {
     ImGui::End();
 }
 
+// The system's confirm button (runtime_services.c, VW_ENTER_BUTTON): circle on a Japanese PS4,
+// where the save list confirms with Circle (B) and cancels with Cross (A).
+bool CircleConfirms() {
+    static const bool circle = [] {
+        const char* v = std::getenv("VW_ENTER_BUTTON");
+        return v && (v[0] == 'c' || v[0] == 'C') && (v[1] == 'i' || v[1] == 'I');
+    }();
+    return circle;
+}
+
 void ChoiceBox() {
     const ImGuiViewport* viewport = ImGui::GetMainViewport();
     ImGui::SetNextWindowPos(ImVec2(viewport->WorkPos.x + viewport->WorkSize.x * 0.5f,
@@ -733,7 +743,9 @@ void ChoiceBox() {
         }
     }
     ImGui::Separator();
-    ImGui::TextDisabled("Up/Down or D-pad: choose   Enter or Cross (A): OK   Esc or Circle (B): cancel");
+    ImGui::TextDisabled(CircleConfirms()
+                            ? "Up/Down or D-pad: choose   Enter or Circle (B): OK   Esc or Cross (A): cancel"
+                            : "Up/Down or D-pad: choose   Enter or Cross (A): OK   Esc or Circle (B): cancel");
     ImGui::End();
 }
 
@@ -941,7 +953,9 @@ bool HandleChoiceEvent(const SDL_Event& event) {
     } else if (event.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN) {
         const u8 button = event.gbutton.button;
         move = button == SDL_GAMEPAD_BUTTON_DPAD_UP ? -1 : button == SDL_GAMEPAD_BUTTON_DPAD_DOWN ? 1 : 0;
-        finish = button == SDL_GAMEPAD_BUTTON_SOUTH ? 1 : button == SDL_GAMEPAD_BUTTON_EAST ? 2 : 0;
+        const u8 ok = CircleConfirms() ? SDL_GAMEPAD_BUTTON_EAST : SDL_GAMEPAD_BUTTON_SOUTH;
+        const u8 back = CircleConfirms() ? SDL_GAMEPAD_BUTTON_SOUTH : SDL_GAMEPAD_BUTTON_EAST;
+        finish = button == ok ? 1 : button == back ? 2 : 0;
     } else {
         return event.type == SDL_EVENT_KEY_UP || event.type == SDL_EVENT_GAMEPAD_BUTTON_UP;
     }

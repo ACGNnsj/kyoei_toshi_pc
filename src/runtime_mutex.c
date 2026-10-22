@@ -122,14 +122,24 @@ static ABI int32_t mutex_timedlock(GuestMutex **mutex, uint32_t usec) {
     if (!e) ++locks;
     return e;
 }
-/* Condition variables: opaque handles over host pthread_cond (CLOCK_REALTIME,
- * like FreeBSD's default), sharing the host mutex behind GuestMutex. */
-typedef struct { pthread_cond_t native; } GuestCond;
-static size_t conds, waits, wakeups;
+/* Condition variables: a FIFO of waiters, each with its own host cond, so a wait returns 0
+ * only for a signal or broadcast. Games build semaphores on these and count every 0 as a token
+ * (City Shrouded in Shadow's job workers, 0x321470): host pthread_cond may wake spuriously, and
+ * a signal racing a timeout could wake a later wait instead, so two workers ran jobs meant to
+ * run one at a time. VW_HOST_COND=1 waits on the plain host cond instead, for comparison. */
+typedef struct CondWaiter { int signaled; pthread_cond_t event; struct CondWaiter *next; } CondWaiter;
+typedef struct { pthread_cond_t native; CondWaiter *first; } GuestCond;
+static pthread_mutex_t cond_lock = PTHREAD_MUTEX_INITIALIZER;
+static size_t conds, waits, wakeups, spurious, raced;
+static int host_cond(void) {
+    static int value = -1;
+    if (value < 0) { const char *v = getenv("VW_HOST_COND"); value = v && *v == '1'; }
+    return value;
+}
 static ABI int32_t cond_init(GuestCond **out, void **attr, const char *name) {
     (void)attr; (void)name;
     if (!out) return orbis_error(EINVAL);
-    GuestCond *c = malloc(sizeof(*c));
+    GuestCond *c = calloc(1, sizeof(*c));
     if (!c) return orbis_error(ENOMEM);
     int e = pthread_cond_init(&c->native, NULL);
     if (e) { free(c); return orbis_error(e); }
@@ -155,35 +165,84 @@ static ABI int32_t cond_destroy(GuestCond **cond) {
     if (!e) { free(*cond); *cond = NULL; }
     return orbis_error(e);
 }
-static ABI int32_t cond_wait(GuestCond **cond, GuestMutex **mutex) {
+static void unlink_waiter(GuestCond *c, CondWaiter *w) {
+    CondWaiter **p = &c->first;
+    while (*p && *p != w) p = &(*p)->next;
+    if (*p) *p = w->next;
+}
+/* Counts printed at each power of two, so a run shows whether these ever happen. */
+static void note(size_t *count, const char *what) {
+    size_t n = ++*count;
+    if (!(n & (n - 1))) fprintf(stderr, "Runtime: condition variables: %zu %s\n", n, what);
+}
+/* end NULL waits without a deadline. */
+static int32_t cond_wait_until(GuestCond **cond, GuestMutex **mutex, const struct timespec *end) {
     int32_t e = ensure_cond(cond);
     if (e) return e;
     if (!mutex || (uintptr_t)*mutex < 3) return orbis_error(EINVAL);
     ++waits;
-    return orbis_error(pthread_cond_wait(&(*cond)->native, &(*mutex)->native));
+    GuestCond *c = *cond;
+    pthread_mutex_t *guest = &(*mutex)->native;
+    if (host_cond())
+        return end ? timed_error(pthread_cond_timedwait(&c->native, guest, end))
+                   : orbis_error(pthread_cond_wait(&c->native, guest));
+    CondWaiter w = {0};
+    int h = pthread_cond_init(&w.event, NULL);
+    if (h) return orbis_error(h);
+    pthread_mutex_lock(&cond_lock);
+    CondWaiter **tail = &c->first;
+    while (*tail) tail = &(*tail)->next;
+    *tail = &w;
+    /* The guest mutex is released only once this wait is queued: a signal sent after it is
+       released finds the waiter. */
+    h = pthread_mutex_unlock(guest);
+    if (h) {
+        unlink_waiter(c, &w);
+        pthread_mutex_unlock(&cond_lock);
+        pthread_cond_destroy(&w.event);
+        return orbis_error(h);
+    }
+    int32_t result = 0;
+    while (!w.signaled) {
+        h = end ? pthread_cond_timedwait(&w.event, &cond_lock, end) : pthread_cond_wait(&w.event, &cond_lock);
+        if (w.signaled) {
+            if (h == ETIMEDOUT) note(&raced, "signals that arrived as a wait timed out (taken as signaled)");
+            break;
+        }
+        if (h == ETIMEDOUT) { unlink_waiter(c, &w); result = (int32_t)UINT32_C(0x8002003c); break; }
+        if (h) { unlink_waiter(c, &w); pthread_mutex_unlock(&cond_lock); pthread_mutex_lock(guest); return orbis_error(h); }
+        note(&spurious, "host wakeups without a signal (waited again)");
+    }
+    pthread_mutex_unlock(&cond_lock);
+    pthread_cond_destroy(&w.event);
+    pthread_mutex_lock(guest);
+    return result;
 }
-static int32_t cond_wait_until(GuestCond **cond, GuestMutex **mutex, const struct timespec *end) {
-    int32_t e = ensure_cond(cond);
-    if (e) return e;
-    if (!mutex || (uintptr_t)*mutex < 3 || !end) return orbis_error(EINVAL);
-    ++waits;
-    return timed_error(pthread_cond_timedwait(&(*cond)->native, &(*mutex)->native, end));
-}
+static ABI int32_t cond_wait(GuestCond **cond, GuestMutex **mutex) { return cond_wait_until(cond, mutex, NULL); }
 static ABI int32_t cond_timedwait(GuestCond **cond, GuestMutex **mutex, uint32_t usec) {
     struct timespec end;
     if (deadline_after(&end, usec)) return orbis_error(EINVAL);
     return cond_wait_until(cond, mutex, &end);
 }
-static ABI int32_t cond_signal(GuestCond **cond) {
+static int32_t wake(GuestCond **cond, int all) {
     int32_t e = ensure_cond(cond);
     if (e) return e;
-    ++wakeups; return orbis_error(pthread_cond_signal(&(*cond)->native));
+    ++wakeups;
+    GuestCond *c = *cond;
+    if (host_cond()) return orbis_error(all ? pthread_cond_broadcast(&c->native) : pthread_cond_signal(&c->native));
+    pthread_mutex_lock(&cond_lock);
+    do {
+        CondWaiter *w = c->first;
+        if (!w) break;
+        c->first = w->next;
+        w->signaled = 1;
+        pthread_cond_signal(&w->event);
+    } while (all);
+    pthread_mutex_unlock(&cond_lock);
+    return 0;
 }
-static ABI int32_t cond_broadcast(GuestCond **cond) {
-    int32_t e = ensure_cond(cond);
-    if (e) return e;
-    ++wakeups; return orbis_error(pthread_cond_broadcast(&(*cond)->native));
-}
+static ABI int32_t cond_signal(GuestCond **cond) { return wake(cond, 0); }
+static ABI int32_t cond_broadcast(GuestCond **cond) { return wake(cond, 1); }
 /* PS4 struct timespec is {int64 sec, int64 nsec}, identical to Linux x86-64. */
 typedef struct { int64_t sec, nsec; } GuestTimespec;
 static ABI int32_t cond_abs_timedwait(GuestCond **cond, GuestMutex **mutex, const GuestTimespec *abs) {

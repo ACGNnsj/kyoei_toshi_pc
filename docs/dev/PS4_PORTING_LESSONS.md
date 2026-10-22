@@ -63,8 +63,11 @@ broke here will break again for the next 3D game. Details: `docs/dev/kyoei/HANDO
   is milliseconds on a PC. Patch it to wait.
 - `VW_PS4_SCHEDULING=1` applies the game's core pinning *and* priorities (pinning alone made
   things worse: equal host priorities time-slice on one CPU).
-- Runtime primitives (mutex, cond, sema, rwlock) were reviewed against PS4 semantics and were
-  right: look at the game and the GPU path before blaming them.
+- Runtime primitives (mutex, cond, sema, rwlock) were reviewed against PS4 semantics, but the
+  cond was a thin host `pthread_cond` wrapper. Games build counting semaphores on a cond and
+  take every 0 from a (timed) wait as a token, without re-checking: a spurious host wakeup, or
+  a signal that races a timeout and wakes a later wait, hands out a token nobody posted. Give
+  each cond waiter its own flag so a wait returns 0 only for a signal.
 
 ## Patching game code
 

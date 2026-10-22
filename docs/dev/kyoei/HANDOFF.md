@@ -304,3 +304,24 @@ Stacks (log run-20261022-092202, overlaps at 126 s): both threads draw through
 the game assumes they never run at the same time. Our scePthreadGetaffinity returns the set masks
 (not the cause). Open: how the PS4 keeps the two apart (same core with FIFO, or a lock/flag of ours).
 The overlap report now names each thread with its priority and core mask.
+
+Run run-20261022-092752 (59 min, stages 203 to 205, no crash; still 30 FPS): 10 overlaps and 12 bad
+packets, so the run was timing luck, not a fix. Every overlap is thread 7 'prio 767 aff 0x7f' writing
+over thread 6 'prio 256 aff 0x20'. Thread 7 may run on any of cores 0-6, so on a PS4 the two can run in
+parallel too: core pinning does not keep them apart, the game's own synchronization must.
+
+That synchronization: both loops (0x372b90 and 0x372d80, one object each) wait on a semaphore at
+obj+0x60 and post obj+0x90 when done. The semaphore (0x321470 wait, 0x321410 post) is a mutex at +0x18,
+a cond at +0x8 and a count at +0x28: the wait decrements the count and, if it was not positive, makes
+one scePthreadCondTimedwait of 16 ms (0x10 * 1000 us). A 0 return counts as a token without checking
+the count again; a timeout (0x8002003c) gives the count back. Our cond was a thin winpthreads
+pthread_cond wrapper, which allows spurious wakeups and a signal that races a timeout waking a later
+wait: either would start a job that was never posted. GOT slots 0x12f7bc8/0x12f8c78/0x12f7b58 are
+scePthreadCondWait/Timedwait/Signal.
+
+src/runtime_mutex.c now queues each cond waiter with its own flag and host cond (like runtime_sema.c):
+a wait returns 0 only for a signal or broadcast. The log counts host wakeups without a signal and
+signals that arrived as a wait timed out; VW_HOST_COND=1 restores the old cond. A stress test of the
+game's semaphore pattern (4 workers, 200000 posts, 2 ms waits) took exactly the posted tokens with both
+conds, so the old cond is not proven wrong yet. Next run: overlaps and bad packets at 0 means this
+was it; overlaps with both counters at 0 points at the dispatcher's wait on obj+0x90 instead.

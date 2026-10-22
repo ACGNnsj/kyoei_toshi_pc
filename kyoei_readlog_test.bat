@@ -36,6 +36,9 @@ set "VW_CB_THREADS=1"
 rem When the game faults in its mesh walk (0x4753c0): the object, its index list and where its
 rem element array really ends.
 set "VW_FAULT_MESH=1"
+rem Condition variables now wake a wait only for a signal (the game counts every wake as a
+rem job token). VW_HOST_COND=1 restores the plain host condition variables, for comparison.
+set "VW_HOST_COND=0"
 if not exist "out\vwport.exe" (
     echo out\vwport.exe is missing: build it first ^(bash build.sh in MSYS2 CLANG64^).
     pause

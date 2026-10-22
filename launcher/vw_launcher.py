@@ -55,6 +55,7 @@ GAMES = {
         'title_id': 'CUSA03562', 'app_version': '01.00',
         'version_hint': 'the Japanese release (APP_VER 01.00)',
         'name': 'City Shrouded in Shadow', 'title': 'Kyoei Toshi', 'run_dir': 'run_kyoei',
+        'repo': 'https://github.com/ioritree/kyoei_toshi_pc',
         # The release feed (scripts/updates.py) is Unicorn Overlord's: never offer it here.
         'updates': False,
         'colors': {'bg': '#10141a', 'gold': '#d08a3a', 'gold_hi': '#f2b871'},

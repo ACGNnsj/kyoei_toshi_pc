@@ -98,8 +98,10 @@ def freeze(python, key, game, binaries):
     version = os.environ.get('VW_VERSION') or subprocess.run(
         ['git', 'describe', '--always', '--dirty', '--tags'], cwd=ROOT, capture_output=True, text=True).stdout.strip()
     (OUT / 'VERSION').write_text((version or 'unknown') + '\n', encoding='utf-8')
+    # patches/: the built-in game patches (scripts/patches.py finds them beside scripts/).
     data = [arg for source, target in ((ROOT / 'run.py', 'runtime'), (OUT / 'VERSION', 'runtime'),
-                                       (ROOT / 'scripts', 'runtime/scripts'), (binaries, 'runtime/bin'))
+                                       (ROOT / 'scripts', 'runtime/scripts'), (ROOT / 'patches', 'runtime/patches'),
+                                       (binaries, 'runtime/bin'))
             for arg in ('--add-data', f'{source}{os.pathsep}{target}')]
     run(python, '-m', 'PyInstaller', '--noconfirm', '--clean', '--log-level', 'WARN', '--onedir',
         '--windowed', '--name', game['title'], '--icon', make_icon(python, game), '--distpath', OUT / 'pyi-dist',
@@ -211,7 +213,8 @@ def main():
         'Keep this folder together (the program, _internal/, LICENSE and licenses/). Settings,\n'
         'the installed game, logs and saves are in data/ beside the program. After an error the\n'
         'program offers a reviewed diagnostics ZIP (also: start it with --export-diagnostics).\n'
-        'Help: https://github.com/hachi23/unicorn_overlord_pc/blob/main/docs/TROUBLESHOOTING.md\n', encoding='utf-8')
+        f'Help: {game.get("repo", "https://github.com/hachi23/unicorn_overlord_pc")}/blob/main/docs/TROUBLESHOOTING.md\n',
+        encoding='utf-8')
     revision = subprocess.check_output(['git', 'rev-parse', '--short=12', 'HEAD'], cwd=ROOT, text=True).strip()
     target = 'windows' if WINDOWS else 'linux'
     with tarfile.open(dist.parent / f'{key}-{target}-symbols-{revision}.tar.gz', 'w:gz') as symbols:

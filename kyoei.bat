@@ -3,6 +3,7 @@ rem City Shrouded in Shadow (Kyoei Toshi): start the game from this source tree.
 rem Needs out\vwport.exe (bash build.sh in the MSYS2 CLANG64 shell) and Python on PATH.
 chcp 65001 >nul
 cd /d "%~dp0"
+rem Development start from the source tree: set VW_GAME_DIR to your CUSA03562 dump folder.
 set "VW_GAME_DIR=D:\_PS4_PC\Kyoei Toshi(巨影都市) PC\CUSA03562"
 set "VW_DATA_DIR=%~dp0run_kyoei"
 set "VW_UPDATES=0"

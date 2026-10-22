@@ -31,7 +31,9 @@ PROFILES = {
         'forced': {'VW_DEFERRED_READBACK': '0', 'VW_STALE_READBACK': '0', 'VW_READBACK_LINEAR': '3'},
         # A Japanese release: its menus confirm with circle. Its save list is the system dialog
         # (the port draws it, vw_overlay.cpp), which follows the system's confirm button.
-        'defaults': {'VW_ENTER_BUTTON': 'circle'},
+        # 60 FPS since the guest cond fix; the game's thread priorities and core pinning applied
+        # as the PS4 schedules them (kyoei.bat sets the same).
+        'defaults': {'VW_ENTER_BUTTON': 'circle', 'VW_FPS_LIMIT': '60', 'VW_PS4_SCHEDULING': '1'},
     },
 }
 

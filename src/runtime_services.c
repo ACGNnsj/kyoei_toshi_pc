@@ -53,6 +53,9 @@ static ABI int32_t user_event(int32_t *event) {
 
 /* ---- SystemService ---- */
 static int language(void) { const char *v=getenv("VW_LANGUAGE"); return v ? atoi(v) : 1; }
+/* The system's confirm button: VW_ENTER_BUTTON=circle as on a Japanese PS4 (0), else cross (1).
+ * Games that confirm with circle in their own menus still follow it in their save screens. */
+static int enter_button(void) { const char *v=getenv("VW_ENTER_BUTTON"); return v && (v[0]=='c'||v[0]=='C') && (v[1]=='i'||v[1]=='I') ? 0 : 1; }
 static ABI int32_t system_param(int32_t id,int32_t *value) {
     if (!value) return SYSTEM_PARAMETER;
     switch (id) {
@@ -66,7 +69,7 @@ static ABI int32_t system_param(int32_t id,int32_t *value) {
 #endif
     case 5: *value=0; break;                    /* summer time */
     case 7: *value=0; break;                    /* parental level off */
-    case 1000: *value=1; break;                 /* enter button = cross */
+    case 1000: *value=enter_button(); break;    /* enter button: 0 circle, 1 cross */
     default: fprintf(stderr,"STOP: unsupported system parameter %d\n",id); exit(21);
     }
     return 0;

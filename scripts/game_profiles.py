@@ -29,6 +29,9 @@ PROFILES = {
         # only with 1 (the game reads a small linear target on the CPU); 3 adds linear images
         # up to 256x256 to 2. (The "reused memory" was the guest cond race, fixed since.)
         'forced': {'VW_DEFERRED_READBACK': '0', 'VW_STALE_READBACK': '0', 'VW_READBACK_LINEAR': '3'},
+        # A Japanese release: its menus confirm with circle, and its save screens follow the
+        # system setting (cross made them the other way round).
+        'defaults': {'VW_ENTER_BUTTON': 'circle'},
     },
 }
 

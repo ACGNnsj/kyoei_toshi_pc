@@ -353,3 +353,11 @@ something reads a frame's vertex or constant data before it is ready or after it
 toggles (A uploads off, B caches off, both off) did not stop it; B off made it flash more often.
 Next: kyoei_serial_test.bat turns every GPU-side thread of the port off (prep workers, draw pipe,
 Vulkan recorder, copy threads, present thread).
+
+kyoei_serial_test.bat: still flashing, so the port's GPU-side threads are not the cause. The owner
+notes the only run with no flashing at all was run-20261022-074625, the one with the slow pipeline
+warm-up (64 of 1613 in 10 s; every other run loads the cache in about 4 s). Either the cached
+pipelines are wrong for these draws (a key that misses some state, e.g. the vertex specialization,
+would give a wrong vertex layout: garbage positions that change with each frame's data), or with a
+slow warm-up these draws were simply skipped (async shaders) while their pipelines compiled. Next:
+kyoei_nocache_test.bat (VW_PIPELINE_CACHE=0, every pipeline compiled fresh, the cache untouched).

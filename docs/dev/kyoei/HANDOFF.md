@@ -325,3 +325,7 @@ signals that arrived as a wait timed out; VW_HOST_COND=1 restores the old cond. 
 game's semaphore pattern (4 workers, 200000 posts, 2 ms waits) took exactly the posted tokens with both
 conds, so the old cond is not proven wrong yet. Next run: overlaps and bad packets at 0 means this
 was it; overlaps with both counters at 0 points at the dispatcher's wait on obj+0x90 instead.
+
+The owner felt run-20261022-092752 ran at about 15 FPS: VW_CB_THREADS scanned the guest stack
+(up to four ReadProcessMemory calls) on every sceGnm call. Stacks are now VW_CB_THREADS=2 only; 1
+records thread names and ranges and counts every overlap past the first 20.

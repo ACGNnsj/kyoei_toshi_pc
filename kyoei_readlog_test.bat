@@ -31,7 +31,8 @@ rem A copy of each submitted command buffer: a corrupt one is compared with what
 rem submitted (did the game write it again before the GPU thread read it?).
 set "VW_DCB_CHECK=1"
 rem Which game thread writes each block of command buffer memory: two threads writing the
-rem same block at once are printed with where in the game they write from.
+rem same block at once are printed (the first 20, then a running count). 2 also records each
+rem write's game call stack, which halves the frame rate.
 set "VW_CB_THREADS=1"
 rem When the game faults in its mesh walk (0x4753c0): the object, its index list and where its
 rem element array really ends.

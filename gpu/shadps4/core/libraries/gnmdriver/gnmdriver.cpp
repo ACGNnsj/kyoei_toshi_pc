@@ -100,7 +100,8 @@ static void WaitGpuIdle() {
 // vw: VW_CB_THREADS=1 — the range of command buffer memory each guest thread writes through
 // these functions, per 64 KiB block. A thread writing inside the range another thread wrote in
 // the last 5 ms (one buffer written by two threads: a packet written over another one) is
-// printed with both call sites in the game; the first 20.
+// printed with both call sites in the game; the first 20, then a count at each power of two.
+// VW_CB_THREADS=2 also records each write's guest stack (slow: about half the frame rate).
 extern "C" int runtime_thread_current_info(char* name, size_t size);
 extern "C" void runtime_describe_address(char* out, size_t size, uintptr_t address);
 namespace {
@@ -143,11 +144,11 @@ void PrintStack(const char* who, const std::array<uintptr_t, 10>& stack) {
 }
 
 void NoteCbWriter(const u32* cmdbuf, uintptr_t caller, const char* function, const void* frame) {
-    static const bool enabled = [] {
+    static const int mode = [] {
         const char* v = std::getenv("VW_CB_THREADS");
-        return v && v[0] == '1';
+        return v ? std::atoi(v) : 0;
     }();
-    if (!enabled || !cmdbuf) {
+    if (mode <= 0 || !cmdbuf) {
         return;
     }
     char name[64];
@@ -173,11 +174,16 @@ void NoteCbWriter(const u32* cmdbuf, uintptr_t caller, const char* function, con
             oldest = &w;
         }
         if (w.at == std::chrono::steady_clock::time_point{} || now - w.at > recent ||
-            address < w.lo || address > w.hi || cb_reports >= 20) {
+            address < w.lo || address > w.hi) {
             continue;
         }
-        ++cb_reports;
-        const auto stack = GuestStack(frame);
+        if (++cb_reports > 20) {
+            if (!(cb_reports & (cb_reports - 1))) {
+                std::fprintf(stderr, "CB threads: %d overlapping writes so far\n", cb_reports);
+            }
+            continue;
+        }
+        const auto stack = mode >= 2 ? GuestStack(frame) : std::array<uintptr_t, 10>{};
         char was[160], is[160];
         runtime_describe_address(was, sizeof(was), w.caller);
         runtime_describe_address(is, sizeof(is), caller);
@@ -202,7 +208,9 @@ void NoteCbWriter(const u32* cmdbuf, uintptr_t caller, const char* function, con
     own->lo = std::min(own->lo, address);
     own->hi = std::max(own->hi, address);
     own->caller = caller;
-    own->stack = GuestStack(frame);
+    if (mode >= 2) {
+        own->stack = GuestStack(frame);
+    }
     own->function = function;
     own->at = now;
 }

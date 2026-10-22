@@ -142,6 +142,28 @@ def collect_binaries():
     return folder
 
 
+def msys2_licenses(binaries, destination):
+    """The licenses of the MSYS2 packages whose DLLs went into the package (the dynamic Windows
+    build: packaging/deps.sh's static libraries do not link on Windows yet)."""
+    if not shutil.which('pacman'):
+        return
+    packages = set()
+    for dll in sorted(binaries.glob('*.dll')):
+        owner = subprocess.run(['pacman', '-Qqo', f'/clang64/bin/{dll.name}'], capture_output=True, text=True)
+        if owner.returncode == 0 and owner.stdout.strip():
+            packages.add(owner.stdout.strip())
+    root = Path(subprocess.run(['cygpath', '-w', '/clang64/share/licenses'], capture_output=True, text=True,
+                               check=True).stdout.strip())
+    destination.mkdir(parents=True, exist_ok=True)
+    for package in sorted(packages):
+        name = package.removeprefix('mingw-w64-clang-x86_64-')
+        if (root / name).is_dir():
+            shutil.copytree(root / name, destination / name, dirs_exist_ok=True)
+    (destination / 'PACKAGES.txt').write_text(
+        'DLLs in _internal/runtime/bin come from these MSYS2 CLANG64 packages (https://packages.msys2.org):\n'
+        + ''.join(f'{p}\n' for p in sorted(packages)), encoding='utf-8')
+
+
 def source_archive(destination):
     """Only tracked port/submodule code and build-downloaded sources, never game data."""
     with tarfile.open(destination, 'w:gz') as archive:
@@ -207,7 +229,11 @@ def main():
     dist.mkdir(parents=True)
     shutil.copytree(launcher, dist, dirs_exist_ok=True)
     shutil.copy2(ROOT / 'LICENSE', dist)
+    # SOURCE.txt names the repository the release comes from (GPL source offer).
+    os.environ['VW_SOURCE_REPO'] = game.get('repo', 'https://github.com/hachi23/unicorn_overlord_pc')
     notices.collect(dist / 'licenses', python)
+    if WINDOWS:
+        msys2_licenses(dist / '_internal' / 'runtime' / 'bin', dist / 'licenses' / 'msys2')
     (dist / 'README.txt').write_text(
         f'{game["title"]} experimental PC port\nNo game files included.\n'
         'Keep this folder together (the program, _internal/, LICENSE and licenses/). Settings,\n'

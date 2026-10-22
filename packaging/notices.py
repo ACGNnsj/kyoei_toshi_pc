@@ -139,7 +139,8 @@ def collect(destination, python):
     shutil.copy2(ROOT / 'packaging/deps.sh', destination / 'dependency-sources-and-build-options.txt')
     commit = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
     (destination / 'SOURCE.txt').write_text(
-        f'Port source revision: {commit}\nhttps://github.com/hachi23/unicorn_overlord_pc/tree/{commit}\n'
+        f'Port source revision: {commit}\n'
+        f'{os.environ.get("VW_SOURCE_REPO", "https://github.com/hachi23/unicorn_overlord_pc")}/tree/{commit}\n'
         'The matching source archive is attached to the release. It contains the port,\n'
         'submodules and downloaded static dependency sources. Build recipes: build.sh,\n'
         'packaging/deps.sh and .github/workflows/build.yml. Header-library versions and\n'

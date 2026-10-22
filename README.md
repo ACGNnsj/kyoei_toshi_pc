@@ -11,7 +11,8 @@ Kyoei Toshi), built on [hachi23/unicorn_overlord_pc](https://github.com/hachi23/
 
 Only this dump is supported. The port's code patches are checked against its `eboot.bin`
 (SHA-256 `42b058e57358cdb0516fb39ddafe583634b03d9987a7950f8fd0c317a8f3af83`): other versions,
-earlier or later than 1.03, are not guaranteed to work.
+earlier or later than 1.03, are not guaranteed to work. The setup warns about another version
+or `eboot.bin` build but lets you try it; the code patches are then left out.
 
 > **Work in progress.** The game has not been played to the end on this port. Known issues are
 > listed [below](#known-issues).

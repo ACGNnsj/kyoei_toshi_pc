@@ -100,25 +100,30 @@ def save_settings(data, settings):
 
 
 def check_game(game_info, folder):
-    """(ok, message) for a game folder."""
+    """(ok, message, warning) for a game folder. Not the game at all: not ok. Another version or
+    eboot.bin build: ok with a warning (the player may try it; it is not supported)."""
     name, title_id, app_version = game_info['name'], game_info['title_id'], game_info['app_version']
     if not folder:
-        return False, f'Choose the folder of your {name} dump.'
+        return False, f'Choose the folder of your {name} dump.', None
     game = Path(folder)
     if not (game / 'eboot.bin').is_file():
         return False, ('There is no eboot.bin in this folder. Choose the folder that contains eboot.bin, '
-                       'sce_module and sce_sys.')
+                       'sce_module and sce_sys.'), None
     title, version = game_title_id(game), game_app_version(game)
     if title != title_id:
-        return False, f'This is {title or "an unknown game"}, not {name} ({title_id}).'
+        return False, f'This is {title or "an unknown game"}, not {name} ({title_id}).', None
+    warning = None
     if version != app_version:
-        return False, f'This dump is version {version}. The port needs {app_version}: {game_info["version_hint"]}.'
-    # The built-in code patches are for one eboot.bin build: another build of the same version
-    # has its code elsewhere and would crash.
-    if not eboot_matches(game, game_profile(title)):
-        return False, (f'This eboot.bin is not the build the port supports ({game_info["version_hint"]}). '
-                       'Other builds, earlier or later, are not supported.')
-    return True, f'{name}  ·  {title_id}  ·  v{version}'
+        warning = (f'This dump is version {version}; the port was made for {app_version} '
+                   f'({game_info["version_hint"]}).')
+    elif not eboot_matches(game, game_profile(title)):
+        # The built-in code patches are for one eboot.bin build: another build has its code
+        # elsewhere, so run.py leaves them out.
+        warning = (f'This eboot.bin is not the build the port was made for ({game_info["version_hint"]}).')
+    if warning:
+        warning += ('\n\nOther versions are not supported: the port\'s code patches for this game are '
+                    'left out, and the game may crash or misbehave. You may still try it.')
+    return True, f'{name}  ·  {title_id}  ·  v{version}', warning
 
 
 def tk_root():
@@ -150,9 +155,14 @@ def choose_game(game_info, start):
                                              initialdir=folder or str(Path.home()), mustexist=True)
             if not folder:
                 return None
-            ok, message = check_game(game_info, folder)
-            if ok:
+            ok, message, warning = check_game(game_info, folder)
+            if ok and not warning:
                 return folder
+            if ok:
+                if messagebox.askyesno(f"{game_info['name']}: setup", warning + '\n\nUse this folder anyway?',
+                                       icon='warning', parent=root):
+                    return folder
+                continue
             if not messagebox.askretrycancel(f"{game_info['name']}: setup", message, parent=root):
                 return None
     finally:

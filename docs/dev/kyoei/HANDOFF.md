@@ -406,3 +406,8 @@ VW_READBACK_LINEAR=1 (00:49 to 04:27): the game reads a small linear render targ
 was dropped for 2 (tiny images only) because of game data overwritten with 1.0f, which was the guest
 cond race. New mode 3 (the profile's now): tiny images and linear images up to 256x256. The log names
 each image written back ("GPU: image ... is written back for the CPU"). kyoei_60fps_test.bat: 60 FPS.
+
+60 FPS (kyoei_60fps_test.bat, log run-20261022-124256): owner reports smooth, no game speed-up;
+kyoei.bat now runs at 60. Save icons: right again (only the 228x128 linear target was added to the
+write-backs). New: the pause menu background is garbage (blocky tiles, wrong colours). Open: whether it
+was right before, and whether it breaks only after a save (the icon write-back).

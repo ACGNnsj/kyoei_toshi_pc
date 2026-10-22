@@ -6,9 +6,9 @@ cd /d "%~dp0"
 set "VW_GAME_DIR=D:\_PS4_PC\Kyoei Toshi(巨影都市) PC\CUSA03562"
 set "VW_DATA_DIR=%~dp0run_kyoei"
 set "VW_UPDATES=0"
-rem Frame rate cap. At 30 without PS4 scheduling two game threads wrote one draw context at
-rem once (corrupted command buffers, see HANDOFF); 15 was stable. 0 = no cap.
-set "VW_FPS_LIMIT=30"
+rem Frame rate cap. 60 since the guest cond fix ended the command buffer race (owner: smooth,
+rem no speed-up). 30 or 15 if a stage misbehaves. 0 = no cap.
+set "VW_FPS_LIMIT=60"
 rem Test: the game's thread priorities and core pinning applied as the PS4's strict priority
 rem scheduler would (threads sharing a core never interleave). 0 = off.
 set "VW_PS4_SCHEDULING=1"

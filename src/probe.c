@@ -279,6 +279,49 @@ static LONG fatal_exception(EXCEPTION_POINTERS *info) {
             runtime_read_log_near((uintptr_t)record->ExceptionInformation[1],0x10000,"fault address");
     }
     if (getenv("VW_FAULT_MESH")) mesh_dump(c);
+    {
+        const char *dump_path=getenv("VW_FAULT_DUMP");
+        if (dump_path && *dump_path) {
+            runtime_read_log_dump_last(dump_path,(uintptr_t)c->R12,0x400);
+            /* Guest code around the faulting instruction: the image is 1:1 with guest offsets, so
+             * <path>.code holds 256 KiB starting 64 KiB before the instruction (offset 0x10000). */
+            char code_path[MAX_PATH+80];
+            snprintf(code_path,sizeof(code_path),"%s.code",dump_path);
+            FILE *out=fopen(code_path,"wb");
+            if (out) {
+                static unsigned char code_buffer[65536];
+                const uintptr_t start=(uintptr_t)c->Rip-0x10000;
+                uint64_t at=0;
+                while (at<0x40000) {
+                    SIZE_T got=0;
+                    if (!ReadProcessMemory(GetCurrentProcess(),(void *)(start+at),code_buffer,sizeof code_buffer,&got) || !got) break;
+                    fwrite(code_buffer,1,(size_t)got,out);
+                    at+=got;
+                }
+                fclose(out);
+                fprintf(stderr,"Read dump: guest code for 0x%llx in %s\n",(unsigned long long)((uintptr_t)c->Rip-(uintptr_t)image),code_path);
+                /* The registers' memory: the two compared strings and the guest stack. */
+                char regs_path[MAX_PATH+80];
+                snprintf(regs_path,sizeof(regs_path),"%s.regs",dump_path);
+                FILE *regs=fopen(regs_path,"wb");
+                if (regs) {
+                    struct { const char *name; uintptr_t at; uint64_t size; } ranges[]={
+                        {"rdi",(uintptr_t)c->Rdi,0x100},{"rsi",(uintptr_t)c->Rsi,0x100},
+                        {"rdx",(uintptr_t)c->Rdx,0x40},{"r8",(uintptr_t)c->R8,0x40},
+                        {"r9",(uintptr_t)c->R9,0x400},{"rsp",(uintptr_t)c->Rsp,0x200},
+                        {"rbx",(uintptr_t)c->Rbx,0x40},{"rbp",(uintptr_t)c->Rbp,0x200}};
+                    for (unsigned i=0;i<sizeof ranges/sizeof ranges[0];++i) {
+                        SIZE_T got=0;
+                        int ok=ReadProcessMemory(GetCurrentProcess(),(void *)ranges[i].at,code_buffer,(SIZE_T)ranges[i].size,&got) && got;
+                        fprintf(stderr,"Read dump: %s %#llx: %s\n",ranges[i].name,
+                                (unsigned long long)ranges[i].at,ok ? "read" : "unreadable");
+                        if (ok) fwrite(code_buffer,1,(size_t)got,regs);
+                    }
+                    fclose(regs);
+                }
+            }
+        }
+    }
     /* rbp chain (guest and host code keep frame pointers). */
     uintptr_t rbp=(uintptr_t)c->Rbp;
     for (int depth=0; depth<24 && rbp; ++depth) {
@@ -992,6 +1035,7 @@ int main(int argc, char **argv) {
     unsigned char *traps = allocate(round_page((import_count + 1) * 32));
     unsigned char *data_traps = allocate((import_count + 1) * page_size);
     protect(data_traps, (import_count + 1) * page_size, 0);
+    uintptr_t *probe_imports = getenv("VW_DUMP_IMPORTS") ? calloc(import_count, sizeof(uintptr_t)) : NULL;
     for (uint64_t i = 0; i < import_count; ++i) {
         unsigned char *t = traps + i * 32;
         /* SysV: mov edi, index; movabs rax, handler; jmp rax. No fake return values. */
@@ -1016,6 +1060,20 @@ int main(int argc, char **argv) {
             }
         }
         memcpy(image + relocs[i].target, &value, 8);
+        if (probe_imports && relocs[i].kind) probe_imports[relocs[i].value] = value;
+    }
+    if (probe_imports) {
+        printf("IMAGE BASE %p size %" PRIu64 "\n", (void *)image, (uint64_t)size);
+        for (uint64_t i = 0; i < import_count; ++i) {
+            uintptr_t v = probe_imports[i];
+            if (!v) continue;
+            const char *where = "host";
+            uintptr_t offset = v;
+            if (v >= (uintptr_t)image && v - (uintptr_t)image < size) { where = "guest"; offset = v - (uintptr_t)image; }
+            else if (v >= (uintptr_t)traps && v - (uintptr_t)traps < round_page((import_count + 1) * 32)) { where = "trap"; offset = v - (uintptr_t)traps; }
+            printf("IMPORT %" PRIu64 " %s -> %s+0x%" PRIxPTR "\n", i, names[i], where, offset);
+        }
+        fflush(NULL);
     }
     if (check_imports) {
         /* Lists every import the game would stop at, without running it (needs the GPU

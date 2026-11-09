@@ -40,6 +40,7 @@ void runtime_thread_report(void);
 void runtime_thread_dump(void);
 /* probe.c: "guest offset 0x...", "module.dll+0x..." or the raw address. */
 void runtime_describe_address(char *out, size_t size, uintptr_t address);
+int runtime_stack_scan(uintptr_t from, uintptr_t *out, int max);
 #endif
 void runtime_set_main_tls(const void *data, uint64_t filesz, uint64_t memsz, uint64_t align);
 void runtime_thread_attach_main(void);
@@ -76,6 +77,7 @@ int64_t runtime_file_close(int fd);
 int64_t runtime_file_read(int fd, void *buffer, uint64_t size);
 /* VW_READ_LOG=1: prints the logged file reads near address (runtime_file.c). */
 void runtime_read_log_near(uintptr_t address, uint64_t radius, const char *label);
+void runtime_read_log_dump_last(const char *path, uintptr_t extra, uint64_t extra_size);
 int64_t runtime_file_pread(int fd, void *buffer, uint64_t size, int64_t offset);
 int64_t runtime_file_write(int fd, const void *buffer, uint64_t size);
 int64_t runtime_file_lseek(int fd, int64_t offset, int whence);

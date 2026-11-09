@@ -467,6 +467,49 @@ static void read_log_note(int fd,const void *buffer,uint64_t size,int64_t offset
     strncpy(r->path,length>=sizeof(r->path) ? path+length-(sizeof(r->path)-1) : path,sizeof(r->path)-1);
     r->path[sizeof(r->path)-1]=0;
 }
+#ifdef _WIN32
+static void dump_range(FILE *out,const void *base,uint64_t size) {
+    unsigned char buffer[65536];
+    uint64_t at=0;
+    while (at<size) {
+        uint64_t want=size-at;
+        if (want>sizeof buffer) want=sizeof buffer;
+        SIZE_T got=0;
+        if (!ReadProcessMemory(GetCurrentProcess(),(const char *)base+at,buffer,(SIZE_T)want,&got) || !got) break;
+        fwrite(buffer,1,(size_t)got,out);
+        if (got<want) break;
+        at+=got;
+    }
+}
+/* VW_FAULT_DUMP=<file>: at a fault, write the bytes the newest logged read brought into guest
+ * memory (plus a small range at a register) so the fault can be compared with the file. */
+void runtime_read_log_dump_last(const char *path,uintptr_t extra,uint64_t extra_size) {
+    if (!read_log_enabled() || !path || !*path) return;
+    FILE *out=fopen(path,"wb");
+    if (!out) { fprintf(stderr,"Read dump: cannot write %s\n",path); return; }
+    uint64_t head=__atomic_load_n(&read_log_head,__ATOMIC_RELAXED);
+    for (uint64_t i=head; i-- > (head>READ_LOG_SIZE ? head-READ_LOG_SIZE : 0);) {
+        const ReadRecord *r=&read_log[i%READ_LOG_SIZE];
+        if (r->seq!=i || r->got<=0 || r->dest<0x10000) continue;
+        uint64_t got=(uint64_t)r->got;
+        fprintf(stderr,"Read dump: record %llu: %llu of %llu bytes at %#llx (file offset %#llx), %llu reads ago: %s\n",
+                (unsigned long long)i,(unsigned long long)got,(unsigned long long)r->size,
+                (unsigned long long)r->dest,(unsigned long long)r->offset,
+                (unsigned long long)(head-1-i),r->path);
+        dump_range(out,(const void *)r->dest,got);
+        break;
+    }
+    if (extra && extra_size) {
+        fprintf(stderr,"Read dump: extra %#llx, %llu bytes\n",(unsigned long long)extra,(unsigned long long)extra_size);
+        dump_range(out,(const void *)extra,extra_size);
+    }
+    fclose(out);
+}
+#else
+void runtime_read_log_dump_last(const char *path,uintptr_t extra,uint64_t extra_size) {
+    (void)path; (void)extra; (void)extra_size;
+}
+#endif
 void runtime_read_log_near(uintptr_t address,uint64_t radius,const char *label) {
     if (!read_log_enabled() || address<0x10000) return;
     uint64_t head=__atomic_load_n(&read_log_head,__ATOMIC_RELAXED), shown=0;
@@ -504,6 +547,50 @@ static void read_throttle(int64_t got) {
     struct timespec t={(time_t)(ns/1000000000u),(long)(ns%1000000000u)}; nanosleep(&t,NULL);
 #endif
 }
+/* VW_READ_TRACE=1: every file read, in order (which reads build a game data structure). */
+static int read_trace_enabled(void) {
+    static int enabled=-1;
+    if (enabled<0) { const char *v=getenv("VW_READ_TRACE"); enabled=v && v[0]=='1'; }
+    return enabled;
+}
+static void read_trace(const char *call,int fd,void *buffer,uint64_t size,int64_t offset,int64_t got) {
+    if (!read_trace_enabled()) return;
+    File *f=get(fd);
+    fprintf(stderr,"Read: %s %s off=%lld size=%llu got=%lld dest=%p ra=%p\n",call,f ? f->path : "?",(long long)offset,
+            (unsigned long long)size,(long long)got,buffer,__builtin_return_address(0));
+}
+/* VW_READ_CALLER=1: guest return addresses above the read, i.e. the guest code that
+ * asked for these bytes (the parser under investigation). */
+static void read_trace_callers(void) {
+    static int enabled=-1;
+    if (enabled<0) { const char *v=getenv("VW_READ_CALLER"); enabled=v && v[0]=='1'; }
+    if (!enabled) return;
+    uintptr_t frames[8];
+    int count=runtime_stack_scan((uintptr_t)frames,frames,8);
+    for (int i=0;i<count;++i) {
+        char where[96];
+        runtime_describe_address(where,sizeof(where),frames[i]);
+        fprintf(stderr,"  caller[%d] %s\n",i,where);
+    }
+}
+/* VW_VERIFY_READ=1: compare the bytes the guest received with a fresh read of the same range. A
+ * mismatch means the buffer the parser sees is not the file's content (alias or cache bug). */
+static void verify_read(int fd,const void *buffer,uint64_t size,int64_t offset,int64_t got) {
+    static int enabled=-1;
+    if (enabled<0) { const char *v=getenv("VW_VERIFY_READ"); enabled=v && v[0]=='1'; }
+    if (!enabled || got<=0 || (uint64_t)got>size) return;
+    int h=host_fd(fd);
+    if (h<0) return;
+    static __thread unsigned char temp[1<<20];
+    if ((uint64_t)got>sizeof temp) return;
+    ssize_t n=pread(h,temp,(size_t)got,offset);
+    if (n!=(ssize_t)got) { fprintf(stderr,"Read verify: short reread %lld of %lld\n",(long long)n,(long long)got); return; }
+    const unsigned char *a=(const unsigned char *)buffer;
+    uint64_t bad=0, first=~0ull;
+    for (uint64_t i=0;i<(uint64_t)got;++i) if (a[i]!=temp[i]) { if (first==~0ull) first=i; ++bad; }
+    fprintf(stderr,"Read verify: off=%lld size=%lld mismatched=%llu first=%lld\n",(long long)offset,(long long)got,
+            (unsigned long long)bad, first==~0ull ? -1LL : (long long)first);
+}
 static int64_t do_read(int fd,void *buffer,uint64_t size) {
     int h=host_fd(fd);
     if (h<0) return -EBADF;
@@ -511,6 +598,8 @@ static int64_t do_read(int fd,void *buffer,uint64_t size) {
     int64_t position=read_log_enabled() ? host_lseek(h,0,SEEK_CUR) : 0;
     ssize_t n=host_read(h,buffer,size);
     read_log_note(fd,buffer,size,position,n);
+    read_trace("read",fd,buffer,size,position,n);
+    read_trace_callers();
     read_throttle(n);
     if (n<0) { if (audio_trace()) printf("Audio trace: read(fd %d, %llu) failed, errno %d\n",fd,(unsigned long long)size,errno); return -errno; }
     __atomic_add_fetch(&reads,1,__ATOMIC_RELAXED); __atomic_add_fetch(&bytes_read,(uint64_t)n,__ATOMIC_RELAXED);
@@ -522,6 +611,9 @@ static int64_t do_pread(int fd,void *buffer,uint64_t size,int64_t offset) {
     touch_for_write(buffer,size);
     ssize_t n=pread(h,buffer,size,offset);
     read_log_note(fd,buffer,size,offset,n);
+    read_trace("pread",fd,buffer,size,offset,n);
+    read_trace_callers();
+    verify_read(fd,buffer,size,offset,n);
     read_throttle(n);
     if (n<0) { if (audio_trace()) printf("Audio trace: pread(fd %d, %llu @%lld) failed, errno %d\n",fd,(unsigned long long)size,(long long)offset,errno); return -errno; }
     __atomic_add_fetch(&reads,1,__ATOMIC_RELAXED); __atomic_add_fetch(&bytes_read,(uint64_t)n,__ATOMIC_RELAXED);

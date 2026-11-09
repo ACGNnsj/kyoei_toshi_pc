@@ -545,6 +545,20 @@ static int32_t map_flexible_locked(void **inout, uint64_t size, int prot, int fl
     if (result) flex_free(phys,size); else ++flexible_maps;
     return result;
 }
+/* VW_MAP_CALLER=1: guest return addresses above the flexible mapping, i.e. the guest code that
+ * chose this allocation. */
+static void map_trace_callers(void) {
+    static int enabled=-1;
+    if (enabled<0) { const char *v=getenv("VW_MAP_CALLER"); enabled=v && v[0]=='1'; }
+    if (!enabled) return;
+    uintptr_t frames[8];
+    int count=runtime_stack_scan((uintptr_t)frames,frames,8);
+    for (int i=0;i<count;++i) {
+        char where[96];
+        runtime_describe_address(where,sizeof(where),frames[i]);
+        fprintf(stderr,"  mcaller[%d] %s\n",i,where);
+    }
+}
 static ABI int32_t map_flexible(void **inout, uint64_t size, int prot, int flags) {
     write_lock();
     int32_t result=map_flexible_locked(inout,size,prot,flags);
@@ -553,6 +567,7 @@ static ABI int32_t map_flexible(void **inout, uint64_t size, int prot, int flags
     if (!result) printf("Runtime: mapped flexible memory %p, size=%" PRIu64 ", prot=0x%x\n", *inout, size, prot);
     else fprintf(stderr,"Runtime: flexible map of %" PRIu64 " bytes failed (0x%x), in use=%" PRIu64 "\n",
                  size, (unsigned)result, flexible_bytes);
+    map_trace_callers();
     return result;
 }
 static ABI int32_t map_flexible_named(void **inout, uint64_t size, int prot, int flags, const char *name) {
